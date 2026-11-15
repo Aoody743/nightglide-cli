@@ -5,7 +5,7 @@ import { runChatCommand } from "./commands/chat.js";
 import { runProvidersCommand } from "./commands/providers.js";
 import { runModelsCommand } from "./commands/models.js";
 
-const VERSION = "0.2.0 (M1 Multi-Provider & Agent Collaboration)";
+const VERSION = "0.3.0 (M2 Native AI Coding & Flight Deck)";
 
 function printHelp(): void {
   console.log(`
@@ -61,7 +61,11 @@ async function main(): Promise<void> {
       break;
 
     case "chat":
-      await runChatCommand({ initialScreen: "chat" });
+      await runChatCommand({
+        initialScreen: "chat",
+        engineType: args.includes("--mock") ? "mock" : "omp",
+        motionMode: args.includes("--no-motion") ? "off" : undefined,
+      });
       break;
 
     case "--version":
@@ -77,7 +81,11 @@ async function main(): Promise<void> {
 
     case undefined:
       // Default action: launch Nightglide TUI
-      await runChatCommand({ initialScreen: "welcome" });
+      await runChatCommand({
+        initialScreen: "welcome",
+        engineType: args.includes("--mock") ? "mock" : "omp",
+        motionMode: args.includes("--no-motion") ? "off" : undefined,
+      });
       break;
 
     default:

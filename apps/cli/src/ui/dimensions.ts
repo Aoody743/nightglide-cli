@@ -15,12 +15,40 @@ export interface TerminalDimensions {
  */
 export function getTerminalTier(width: number, height: number): TerminalTier {
   if (width <= 85 || height <= 25) {
-    return "small"; // e.g. 80x24 classic terminal
+    return "small"; // e.g. 80x24 classic compact terminal
   }
   if (width <= 110 || height <= 32) {
-    return "medium"; // e.g. 100x30 laptop terminal
+    return "medium"; // e.g. 100x30 laptop standard terminal
   }
   return "large"; // e.g. 120x36 widescreen terminal
+}
+
+/**
+ * Returns human-readable display name for the terminal tier.
+ */
+export function getTierDisplayName(tier: TerminalTier): string {
+  switch (tier) {
+    case "small":
+      return "Compact (80x24)";
+    case "medium":
+      return "Standard (100x30)";
+    case "large":
+      return "Wide (120x36)";
+  }
+}
+
+/**
+ * Returns a short badge representation for the terminal tier.
+ */
+export function getTierBadge(tier: TerminalTier): string {
+  switch (tier) {
+    case "small":
+      return "S";
+    case "medium":
+      return "M";
+    case "large":
+      return "L";
+  }
 }
 
 /**
@@ -30,6 +58,46 @@ export function getFallbackDimensions(): { width: number; height: number } {
   return {
     width: process.stdout?.columns && process.stdout.columns > 0 ? process.stdout.columns : 100,
     height: process.stdout?.rows && process.stdout.rows > 0 ? process.stdout.rows : 30,
+  };
+}
+
+/**
+ * Computes viewport capacity and layout heights for the conversation timeline
+ * so the Composer and messages remain fully visible without being pushed off screen.
+ */
+export function computeViewportCapacity(
+  dimensions?: { height?: number; width?: number } | TerminalDimensions
+): {
+  maxVisibleMessages: number;
+  timelineHeight: number;
+  isCompact: boolean;
+} {
+  const height = dimensions?.height ?? 30;
+  const isCompact = height < 28;
+
+  if (isCompact) {
+    // 80x24: strictly limit messages and height to avoid screen overflow
+    return {
+      maxVisibleMessages: 3,
+      timelineHeight: Math.max(12, height - 9),
+      isCompact: true,
+    };
+  }
+
+  if (height < 34) {
+    // 100x30: standard laptop view
+    return {
+      maxVisibleMessages: 5,
+      timelineHeight: Math.max(16, height - 10),
+      isCompact: false,
+    };
+  }
+
+  // 120x36+: wide terminal
+  return {
+    maxVisibleMessages: 8,
+    timelineHeight: Math.max(22, height - 10),
+    isCompact: false,
   };
 }
 

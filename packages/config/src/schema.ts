@@ -6,6 +6,8 @@ import type { AgentRole, ProviderLocality, RoutingMode } from "@nightglide/core"
 
 export type InteractionMode = "guided" | "expert";
 
+export type MotionMode = "auto" | "reduced" | "off";
+
 export type ProviderType = "openai-compatible" | "ollama" | "omlx" | "custom";
 
 export interface ProviderEndpointConfig {
@@ -37,6 +39,7 @@ export interface NightglideConfig {
   version: number;
   theme: string;
   interactionMode: InteractionMode;
+  motion?: MotionMode;
   provider: string;
   model: string;
   providers: Record<string, ProviderEndpointConfig>;

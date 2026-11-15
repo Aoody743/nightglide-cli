@@ -9,6 +9,8 @@ import {
   type AgentStatus,
   type SubagentMonitorItem,
   type RoutingDecision,
+  type FileDiffData,
+  type ApprovalAnswer,
   SessionDisposedError,
 } from "@nightglide/core";
 
@@ -25,6 +27,10 @@ export interface MockEngineOptions {
   greetingChunks?: readonly string[];
   mockToolResult?: unknown;
   forceMultiAgent?: boolean;
+  mockToolName?: string;
+  mockToolInput?: Record<string, unknown>;
+  mockToolDiff?: FileDiffData;
+  requireApproval?: boolean;
 }
 
 function delay(ms: number, signal?: AbortSignal): Promise<void> {
@@ -69,6 +75,10 @@ export class MockAgentSession implements AgentSession {
   private readonly greetingChunks: readonly string[];
   private readonly mockToolResult: unknown;
   private readonly forceMultiAgent: boolean;
+  private readonly mockToolName?: string;
+  private readonly mockToolInput?: Record<string, unknown>;
+  private readonly mockToolDiff?: FileDiffData;
+  private readonly requireApproval?: boolean;
   private readonly subagents = new Map<string, SubagentMonitorItem>();
 
   constructor(
@@ -81,6 +91,10 @@ export class MockAgentSession implements AgentSession {
     this.stepDelayMs = engineOptions?.stepDelayMs ?? 10;
     this.greetingChunks = engineOptions?.greetingChunks ?? DEFAULT_MOCK_GREETING_CHUNKS;
     this.forceMultiAgent = Boolean(engineOptions?.forceMultiAgent);
+    this.mockToolName = engineOptions?.mockToolName;
+    this.mockToolInput = engineOptions?.mockToolInput;
+    this.mockToolDiff = engineOptions?.mockToolDiff;
+    this.requireApproval = engineOptions?.requireApproval;
     this.mockToolResult = engineOptions?.mockToolResult ?? {
       status: "verified",
       flightPlan: "FL350-STAR-01",
@@ -131,7 +145,7 @@ export class MockAgentSession implements AgentSession {
       if (isCollabPrompt) {
         await this.runMultiAgentWorkflow(prompt, waitStep);
       } else {
-        await this.runSingleAgentWorkflow(waitStep);
+        await this.runSingleAgentWorkflow(prompt, waitStep);
       }
     } catch (err: unknown) {
       if (
@@ -152,27 +166,98 @@ export class MockAgentSession implements AgentSession {
     }
   }
 
-  private async runSingleAgentWorkflow(waitStep: (ms: number) => Promise<void>): Promise<void> {
+  private async runSingleAgentWorkflow(
+    prompt: string,
+    waitStep: (ms: number) => Promise<void>
+  ): Promise<void> {
     // 1. Thinking
     this.setStatus("thinking", "Analyzing flight telemetry and celestial coordinates...");
     await waitStep(this.stepDelayMs);
 
+    const isEditOrWritePrompt = /\b(edit|write|code|create file|modify)\b/i.test(prompt);
+    const toolName = this.mockToolName ?? (isEditOrWritePrompt ? "write" : "read");
+    const toolInput =
+      this.mockToolInput ??
+      (toolName === "write"
+        ? { path: "stellar-core.ts", content: "export const core = true;\n" }
+        : toolName === "edit"
+          ? { path: "stellar-core.ts", old_string: "core = true", new_string: "core = verified" }
+          : { path: "flight-plan.md" });
+
+    // Optional simulated approval request
+    const needApproval =
+      this.requireApproval ||
+      (this.sessionOptions.approvalMode === "always-ask" &&
+        (toolName === "write" || toolName === "edit" || toolName === "bash"));
+
+    if (needApproval) {
+      const approvalId = `approval_mock_${Date.now()}`;
+      await new Promise<void>((resolve, reject) => {
+        let settled = false;
+        const resolveFn = (ans: ApprovalAnswer) => {
+          if (settled) return;
+          settled = true;
+          this.emit({ type: "approval_resolved", id: approvalId, answer: ans });
+          if (ans === "deny") {
+            reject(new Error(`Tool call denied by user: ${toolName}`));
+          } else {
+            resolve();
+          }
+        };
+
+        const request = {
+          id: approvalId,
+          toolName,
+          prompt: {
+            full: `Approve execution of tool ${toolName} with input ${JSON.stringify(toolInput)}`,
+            compact: `Allow tool: ${toolName}`,
+            session: `Approve ${toolName} for this session`,
+          },
+          resolve: resolveFn,
+        };
+
+        this.emit({ type: "approval_request", ...request });
+        if (typeof this.sessionOptions.onApprovalRequest === "function") {
+          try {
+            this.sessionOptions.onApprovalRequest(request);
+          } catch (err) {
+            console.error("MockAgentSession onApprovalRequest error:", err);
+          }
+        }
+      });
+      await waitStep(this.stepDelayMs);
+    }
+
     // 2. Simulated tool call
     const toolCallId = `call_mock_${Date.now()}`;
-    this.setStatus("executing_tool", "Executing tool: read");
+    this.setStatus("executing_tool", `Executing tool: ${toolName}`);
     this.emit({
       type: "tool_start",
-      toolName: "read",
+      toolName,
       toolCallId,
-      input: { path: "flight-plan.md" },
+      input: toolInput,
     });
     await waitStep(this.stepDelayMs);
 
+    let diffData: FileDiffData | undefined = undefined;
+    if (toolName === "write" || toolName === "edit") {
+      diffData = this.mockToolDiff ?? {
+        filePath: (toolInput.path as string) ?? "stellar-core.ts",
+        diff:
+          toolName === "write"
+            ? "--- /dev/null\n+++ b/stellar-core.ts\n@@ -0,0 +1,1 @@\n+export const core = true;\n"
+            : "--- a/stellar-core.ts\n+++ b/stellar-core.ts\n@@ -1,1 +1,1 @@\n-export const core = true;\n+export const core = verified;\n",
+        additions: 1,
+        deletions: toolName === "edit" ? 1 : 0,
+      };
+    }
+
     this.emit({
       type: "tool_end",
-      toolName: "read",
+      toolName,
       toolCallId,
       result: this.mockToolResult,
+      diff: diffData,
     });
     await waitStep(this.stepDelayMs);
 

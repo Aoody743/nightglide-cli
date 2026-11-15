@@ -8,5 +8,7 @@ export {
 export {
   OmpAgentEngine,
   OmpAgentSession,
+  parseDiffStats,
+  generateUnifiedDiff,
   type OmpAgentEngineOptions,
 } from "./omp-adapter.js";

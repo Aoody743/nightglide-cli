@@ -4,6 +4,7 @@ import fs from "node:fs/promises";
 import type {
   NightglideConfig,
   InteractionMode,
+  MotionMode,
   ProviderEndpointConfig,
   RoutingConfig,
   SecurityPermissionConfig,
@@ -50,6 +51,10 @@ export function validateConfig(raw: unknown): ValidationResult<NightglideConfig>
     obj.interactionMode === "expert" || obj.interactionMode === "guided"
       ? obj.interactionMode
       : DEFAULT_CONFIG.interactionMode;
+  const motion: MotionMode =
+    obj.motion === "off" || obj.motion === "reduced" || obj.motion === "auto"
+      ? obj.motion
+      : (DEFAULT_CONFIG.motion ?? "auto");
   const provider = typeof obj.provider === "string" ? obj.provider : DEFAULT_CONFIG.provider;
   const model = typeof obj.model === "string" ? obj.model : DEFAULT_CONFIG.model;
 
@@ -141,6 +146,7 @@ export function validateConfig(raw: unknown): ValidationResult<NightglideConfig>
       version,
       theme,
       interactionMode,
+      motion,
       provider,
       model,
       providers,

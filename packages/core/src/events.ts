@@ -14,6 +14,18 @@ export type AgentStatus =
   | "error"
   | "completed";
 
+/**
+ * Structured diff representation for file changes.
+ */
+export interface FileDiffData {
+  readonly filePath: string;
+  readonly diff: string;
+  readonly additions: number;
+  readonly deletions: number;
+}
+
+export type ApprovalAnswer = "once" | "session" | "deny";
+
 export type AgentEvent =
   | { readonly type: "text_delta"; readonly delta: string }
   | {
@@ -28,6 +40,7 @@ export type AgentEvent =
       readonly toolCallId: string;
       readonly result?: unknown;
       readonly error?: string;
+      readonly diff?: FileDiffData;
     }
   | {
       readonly type: "status";
@@ -69,6 +82,22 @@ export type AgentEvent =
       readonly result?: unknown;
       readonly error?: string;
       readonly totalTokens?: number;
+    }
+  | {
+      readonly type: "approval_request";
+      readonly id: string;
+      readonly toolName: string;
+      readonly prompt: {
+        readonly full: string;
+        readonly compact: string;
+        readonly session?: string;
+      };
+      readonly resolve: (answer: ApprovalAnswer) => void;
+    }
+  | {
+      readonly type: "approval_resolved";
+      readonly id: string;
+      readonly answer: ApprovalAnswer;
     };
 
 export type AgentEventHandler = (event: AgentEvent) => void;

@@ -1,3 +1,4 @@
+import fsSync from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import {
@@ -17,6 +18,8 @@ import {
   type SubagentMonitorItem,
   type AgentRole,
   type ProviderLocality,
+  type FileDiffData,
+  type ApprovalAnswer,
   EngineError,
   ModelNotConfiguredError,
   SessionDisposedError,
@@ -36,6 +39,87 @@ type OmpSessionInstance = Awaited<ReturnType<typeof createAgentSession>>["sessio
 type OmpEventBus = Awaited<ReturnType<typeof createAgentSession>>["subagentEventBus"];
 
 /**
+ * Computes additions and deletions count from a unified or line-numbered diff string.
+ */
+export function parseDiffStats(diffText: string): { additions: number; deletions: number } {
+  let additions = 0;
+  let deletions = 0;
+  const lines = diffText.split("\n");
+  for (const line of lines) {
+    if (/^\s*\+(?!\+\+)/.test(line)) {
+      additions++;
+    } else if (/^\s*-(?!--)/.test(line)) {
+      deletions++;
+    }
+  }
+  return { additions, deletions };
+}
+
+/**
+ * Generates a unified diff between two text versions of a file.
+ */
+export function generateUnifiedDiff(filePath: string, oldText: string, newText: string): string {
+  const oldLines = oldText.length > 0 ? oldText.split("\n") : [];
+  const newLines = newText.length > 0 ? newText.split("\n") : [];
+
+  if (oldLines.length === 0 && newLines.length === 0) {
+    return "";
+  }
+  if (oldLines.length === 0) {
+    const body = newLines.map((l) => `+${l}`).join("\n");
+    return `--- /dev/null\n+++ b/${filePath}\n@@ -0,0 +1,${newLines.length} @@\n${body}`;
+  }
+  if (newLines.length === 0) {
+    const body = oldLines.map((l) => `-${l}`).join("\n");
+    return `--- a/${filePath}\n+++ /dev/null\n@@ -1,${oldLines.length} +0,0 @@\n${body}`;
+  }
+
+  let prefix = 0;
+  while (
+    prefix < oldLines.length &&
+    prefix < newLines.length &&
+    oldLines[prefix] === newLines[prefix]
+  ) {
+    prefix++;
+  }
+
+  let suffix = 0;
+  while (
+    suffix < oldLines.length - prefix &&
+    suffix < newLines.length - prefix &&
+    oldLines[oldLines.length - 1 - suffix] === newLines[newLines.length - 1 - suffix]
+  ) {
+    suffix++;
+  }
+
+  const removed = oldLines.slice(prefix, oldLines.length - suffix);
+  const added = newLines.slice(prefix, newLines.length - suffix);
+
+  if (removed.length === 0 && added.length === 0) {
+    return "";
+  }
+
+  const contextBefore = oldLines.slice(Math.max(0, prefix - 3), prefix);
+  const contextAfter = oldLines.slice(
+    oldLines.length - suffix,
+    Math.min(oldLines.length, oldLines.length - suffix + 3)
+  );
+
+  const hunkLines: string[] = [];
+  for (const line of contextBefore) hunkLines.push(` ${line}`);
+  for (const line of removed) hunkLines.push(`-${line}`);
+  for (const line of added) hunkLines.push(`+${line}`);
+  for (const line of contextAfter) hunkLines.push(` ${line}`);
+
+  const oldStart = Math.max(1, prefix - contextBefore.length + 1);
+  const oldCount = contextBefore.length + removed.length + contextAfter.length;
+  const newStart = Math.max(1, prefix - contextBefore.length + 1);
+  const newCount = contextBefore.length + added.length + contextAfter.length;
+
+  return `--- a/${filePath}\n+++ b/${filePath}\n@@ -${oldStart},${oldCount} +${newStart},${newCount} @@\n${hunkLines.join("\n")}`;
+}
+
+/**
  * Adapter session wrapping an isolated OMP AgentSession, normalizing internal
  * stream deltas, tool calls, and subagent lifecycle events into standardized @nightglide/core AgentEvents.
  */
@@ -47,6 +131,7 @@ export class OmpAgentSession implements AgentSession {
 
   private readonly ompSession: OmpSessionInstance;
   private readonly subagentEventBus?: OmpEventBus;
+  private readonly sessionOptions: CreateSessionOptions;
   private status: AgentStatus = "idle";
   private disposed = false;
   private messageHistoryCount = 0;
@@ -54,6 +139,12 @@ export class OmpAgentSession implements AgentSession {
   private unsubscribeOmp: (() => void) | null = null;
   private unsubscribeSubagent: (() => void) | null = null;
   private readonly subagents = new Map<string, SubagentMonitorItem>();
+  private currentActiveToolName: string | null = null;
+  private readonly activeToolCalls = new Map<
+    string,
+    { toolName: string; args: Record<string, unknown>; snapshot?: string }
+  >();
+  private readonly pendingApprovals = new Map<string, (answer: ApprovalAnswer) => void>();
 
   constructor(
     ompSession: OmpSessionInstance,
@@ -61,13 +152,15 @@ export class OmpAgentSession implements AgentSession {
     model: string,
     subagentEventBus?: OmpEventBus,
     sessionId?: string,
-    readOnly = false
+    readOnly = false,
+    sessionOptions?: CreateSessionOptions
   ) {
     this.ompSession = ompSession;
     this.workspacePath = workspacePath;
     this.model = model;
     this.subagentEventBus = subagentEventBus;
     this.readOnly = readOnly;
+    this.sessionOptions = sessionOptions ?? { workspacePath, readOnly };
     this.id = sessionId ?? ompSession.sessionManager.getSessionId?.() ?? `omp_session_${Date.now()}`;
 
     // Subscribe to internal main OMP session events
@@ -97,6 +190,73 @@ export class OmpAgentSession implements AgentSession {
   private setStatus(status: AgentStatus, message?: string): void {
     this.status = status;
     this.emit({ type: "status", status, message });
+  }
+
+  /**
+   * Handles approval requests initiated by native OMP tools via ExtensionUIContext.approve.
+   */
+  handleApprovalPrompt(prompt: {
+    full: string;
+    compact: string;
+    session?: string;
+  }): Promise<ApprovalAnswer> {
+    const id = `approval_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    let toolName = this.currentActiveToolName;
+    if (!toolName) {
+      const match =
+        prompt.compact?.match(/Allow tool:\s*([a-zA-Z0-9_-]+)/i) ||
+        prompt.full?.match(/Allow tool:\s*([a-zA-Z0-9_-]+)/i) ||
+        prompt.full?.match(/^([a-zA-Z0-9_-]+)/);
+      toolName = match ? match[1] : "tool";
+    }
+
+    if (this.sessionOptions.approvalMode === "yolo") {
+      return Promise.resolve("session");
+    }
+    if (this.sessionOptions.approvalMode === "auto") {
+      return Promise.resolve("once");
+    }
+
+    return new Promise<ApprovalAnswer>((resolvePromise) => {
+      let settled = false;
+      const resolve = (answer: ApprovalAnswer) => {
+        if (settled) return;
+        settled = true;
+        this.pendingApprovals.delete(id);
+        this.emit({
+          type: "approval_resolved",
+          id,
+          answer,
+        });
+        resolvePromise(answer);
+      };
+
+      this.pendingApprovals.set(id, resolve);
+
+      const request = {
+        id,
+        toolName,
+        prompt: {
+          full: prompt.full,
+          compact: prompt.compact,
+          session: prompt.session,
+        },
+        resolve,
+      };
+
+      this.emit({
+        type: "approval_request",
+        ...request,
+      });
+
+      if (typeof this.sessionOptions.onApprovalRequest === "function") {
+        try {
+          this.sessionOptions.onApprovalRequest(request);
+        } catch (err) {
+          console.error("OmpAgentSession onApprovalRequest error:", err);
+        }
+      }
+    });
   }
 
   /**
@@ -144,27 +304,73 @@ export class OmpAgentSession implements AgentSession {
       }
 
       case "tool_execution_start": {
-        this.setStatus("executing_tool", `Executing tool: ${event.toolName}`);
+        const toolName = event.toolName;
+        const toolCallId = event.toolCallId;
+        const args = (event.args as Record<string, unknown>) ?? {};
+        this.currentActiveToolName = toolName;
+
+        let snapshot: string | undefined = undefined;
+        if (toolName === "write" || toolName === "edit") {
+          const rawPath =
+            typeof args.path === "string"
+              ? args.path
+              : typeof args.file_path === "string"
+                ? args.file_path
+                : undefined;
+          if (rawPath) {
+            const absPath = path.isAbsolute(rawPath)
+              ? rawPath
+              : path.resolve(this.workspacePath, rawPath);
+            try {
+              if (fsSync.existsSync(absPath)) {
+                snapshot = fsSync.readFileSync(absPath, "utf8");
+              }
+            } catch {}
+          }
+        }
+
+        this.activeToolCalls.set(toolCallId, { toolName, args, snapshot });
+
+        this.setStatus("executing_tool", `Executing tool: ${toolName}`);
         this.emit({
           type: "tool_start",
-          toolName: event.toolName,
-          toolCallId: event.toolCallId,
-          input: (event.args as Record<string, unknown>) ?? {},
+          toolName,
+          toolCallId,
+          input: args,
         });
         break;
       }
 
       case "tool_execution_end": {
+        const toolName = event.toolName;
+        const toolCallId = event.toolCallId;
+        const stored = this.activeToolCalls.get(toolCallId);
+        this.activeToolCalls.delete(toolCallId);
+        if (this.currentActiveToolName === toolName) {
+          this.currentActiveToolName = null;
+        }
+
+        let diff: FileDiffData | undefined = undefined;
+        if (toolName === "edit" || toolName === "write") {
+          diff = this.extractDiffData(
+            toolName,
+            stored?.args ?? (event.args as Record<string, unknown>),
+            event.result,
+            stored?.snapshot
+          );
+        }
+
         this.emit({
           type: "tool_end",
-          toolName: event.toolName,
-          toolCallId: event.toolCallId,
+          toolName,
+          toolCallId,
           result: event.result,
           error: event.isError
             ? typeof event.result === "string"
               ? event.result
               : "Tool execution encountered an error"
             : undefined,
+          diff,
         });
         break;
       }
@@ -213,6 +419,153 @@ export class OmpAgentSession implements AgentSession {
         break;
       }
     }
+  }
+
+  /**
+   * Extracts or generates FileDiffData from tool execution results or filesystem state.
+   */
+  private extractDiffData(
+    toolName: string,
+    args: Record<string, unknown> | undefined,
+    result: unknown,
+    snapshot?: string
+  ): FileDiffData | undefined {
+    // 1. Direct FileDiffData object provided on result or args
+    if (result && typeof result === "object" && "diff" in result) {
+      const resDiff = (result as any).diff;
+      if (
+        resDiff &&
+        typeof resDiff === "object" &&
+        typeof resDiff.filePath === "string" &&
+        typeof resDiff.diff === "string"
+      ) {
+        return resDiff as FileDiffData;
+      }
+    }
+    if (args && typeof args === "object" && "diff" in args) {
+      const argsDiff = (args as any).diff;
+      if (
+        argsDiff &&
+        typeof argsDiff === "object" &&
+        typeof argsDiff.filePath === "string" &&
+        typeof argsDiff.diff === "string"
+      ) {
+        return argsDiff as FileDiffData;
+      }
+    }
+
+    // 2. OMP edit tool details
+    if (result && typeof result === "object" && "details" in result) {
+      const details = (result as any).details;
+      if (details && typeof details === "object") {
+        if (typeof details.diff === "string" && details.diff.length > 0) {
+          const stats = parseDiffStats(details.diff);
+          const filePath =
+            (args?.path as string) ??
+            (args?.file_path as string) ??
+            details.path ??
+            details.perFileResults?.[0]?.path ??
+            "unknown";
+          return {
+            filePath,
+            diff: details.diff,
+            additions: stats.additions,
+            deletions: stats.deletions,
+          };
+        }
+
+        if (
+          typeof details.oldText === "string" ||
+          typeof details.newText === "string"
+        ) {
+          const filePath =
+            (args?.path as string) ??
+            (args?.file_path as string) ??
+            details.path ??
+            details.perFileResults?.[0]?.path ??
+            "unknown";
+          const oldText = details.oldText ?? "";
+          const newText = details.newText ?? "";
+          const diffText = generateUnifiedDiff(filePath, oldText, newText);
+          const stats = parseDiffStats(diffText);
+          return {
+            filePath,
+            diff: diffText,
+            additions: stats.additions,
+            deletions: stats.deletions,
+          };
+        }
+      }
+    }
+
+    // 3. String diff on result
+    if (result && typeof result === "object" && typeof (result as any).diff === "string") {
+      const diffStr = (result as any).diff;
+      if (diffStr.length > 0) {
+        const stats = parseDiffStats(diffStr);
+        const filePath =
+          (args?.path as string) ??
+          (args?.file_path as string) ??
+          (result as any).filePath ??
+          "unknown";
+        return {
+          filePath,
+          diff: diffStr,
+          additions: stats.additions,
+          deletions: stats.deletions,
+        };
+      }
+    }
+
+    // 4. File system inspection for write / edit if content or changes occurred
+    const rawPath =
+      (args?.path as string) ??
+      (args?.file_path as string) ??
+      (result && typeof result === "object" && (result as any).details?.resolvedPath
+        ? (result as any).details.resolvedPath
+        : undefined);
+
+    if (rawPath) {
+      const absPath = path.isAbsolute(rawPath)
+        ? rawPath
+        : path.resolve(this.workspacePath, rawPath);
+      let currentDiskContent: string | undefined = undefined;
+      try {
+        if (fsSync.existsSync(absPath)) {
+          currentDiskContent = fsSync.readFileSync(absPath, "utf8");
+        }
+      } catch {}
+
+      const content =
+        typeof args?.content === "string"
+          ? args.content
+          : currentDiskContent;
+
+      if (snapshot !== undefined && currentDiskContent !== undefined) {
+        if (snapshot !== currentDiskContent) {
+          const diffText = generateUnifiedDiff(rawPath, snapshot, currentDiskContent);
+          const stats = parseDiffStats(diffText);
+          return {
+            filePath: rawPath,
+            diff: diffText,
+            additions: stats.additions,
+            deletions: stats.deletions,
+          };
+        }
+      } else if (content !== undefined) {
+        const oldText = snapshot ?? "";
+        const diffText = generateUnifiedDiff(rawPath, oldText, content);
+        const stats = parseDiffStats(diffText);
+        return {
+          filePath: rawPath,
+          diff: diffText,
+          additions: stats.additions,
+          deletions: stats.deletions,
+        };
+      }
+    }
+
+    return undefined;
   }
 
   /**
@@ -325,6 +678,14 @@ export class OmpAgentSession implements AgentSession {
   async cancel(): Promise<void> {
     if (this.disposed || Boolean(this.ompSession.isDisposed)) return;
     this.setStatus("cancelling", "Cancelling session and active subagents...");
+
+    for (const [id, resolver] of this.pendingApprovals.entries()) {
+      try {
+        resolver("deny");
+      } catch {}
+    }
+    this.pendingApprovals.clear();
+
     try {
       await this.ompSession.abort({ reason: "User cancelled session" } as any);
     } catch {
@@ -363,6 +724,13 @@ export class OmpAgentSession implements AgentSession {
     try {
       await this.cancel();
     } catch {}
+
+    for (const [id, resolver] of this.pendingApprovals.entries()) {
+      try {
+        resolver("deny");
+      } catch {}
+    }
+    this.pendingApprovals.clear();
 
     if (this.unsubscribeOmp) {
       try {
@@ -426,10 +794,24 @@ export class OmpAgentEngine implements AgentEngine {
     const agentDir =
       options.agentDir ??
       this.options.defaultAgentDir ??
-      path.join(os.tmpdir(), "nightglide-omp-isolated");
+      path.join(os.tmpdir(), `nightglide-omp-isolated-${Date.now()}`);
 
-    // Configure isolated settings
-    const settings = Settings.isolated();
+    const ompApprovalMode =
+      options.approvalMode === "auto"
+        ? "yolo"
+        : options.approvalMode
+          ? options.approvalMode
+          : options.onApprovalRequest
+            ? "always-ask"
+            : "yolo";
+
+    // Configure isolated settings with find.enabled on and approval mode configured
+    const initialSettings: Record<string, unknown> = {
+      "find.enabled": "on",
+      "edit.mode": "replace",
+      "tools.approvalMode": ompApprovalMode,
+    };
+    const settings = Settings.isolated(initialSettings);
 
     // Configure role-based model mappings in OMP settings
     if (options.roleModelOverrides) {
@@ -450,7 +832,7 @@ export class OmpAgentEngine implements AgentEngine {
     const sessionOptions: Parameters<typeof createAgentSession>[0] = {
       cwd: options.workspacePath,
       agentDir,
-      sessionManager: SessionManager.inMemory(),
+      sessionManager: SessionManager.inMemory(options.workspacePath),
       settings,
       disableExtensionDiscovery: true,
       enableMCP: false,
@@ -474,14 +856,83 @@ export class OmpAgentEngine implements AgentEngine {
       this.options.defaultModel ??
       "omp-default";
 
-    return new OmpAgentSession(
+    const session = new OmpAgentSession(
       sessionResult.session,
       options.workspacePath,
       resolvedModel,
       sessionResult.subagentEventBus,
       undefined,
-      Boolean(options.readOnly)
+      Boolean(options.readOnly),
+      options
     );
+
+    const uiContext = {
+      supportsEditor: false,
+      select: async (_title: string, optionsList: Array<{ label: string }>) =>
+        optionsList[0]?.label,
+      confirm: async () => true,
+      input: async () => undefined,
+      notify: () => {},
+      onTerminalInput: () => () => {},
+      rerenderMessage: () => {},
+      refreshTranscript: () => {},
+      getLinkClicksAvailable: () => false,
+      approve: async (prompt: { full: string; compact: string; session?: string }) => {
+        return session.handleApprovalPrompt(prompt);
+      },
+    };
+
+    if (typeof sessionResult.setToolUIContext === "function") {
+      sessionResult.setToolUIContext(uiContext as any, true);
+    }
+
+    const runner = (sessionResult.session as any).extensionRunner;
+    if (runner && typeof runner.initialize === "function") {
+      try {
+        runner.initialize(
+          {
+            sendMessage: async (m: any, o: any) => {
+              (sessionResult.session as any).sendCustomMessage?.(m, o);
+            },
+            sendUserMessage: (c: any, o: any) =>
+              (sessionResult.session as any).sendUserMessage?.(c, o),
+            appendEntry: (t: any, d: any) =>
+              (sessionResult.session as any).sessionManager?.appendCustomEntry?.(t, d),
+            getActiveTools: () => (sessionResult.session as any).getActiveToolNames?.() ?? [],
+            getAllTools: () => (sessionResult.session as any).getAllToolInfos?.() ?? [],
+            setActiveTools: async (n: any) =>
+              (sessionResult.session as any).setActiveToolsByName?.(n),
+            getCommands: () => [],
+            setModel: async (m: any) => (sessionResult.session as any).setModel?.(m),
+            getThinkingLevel: () => (sessionResult.session as any).thinkingLevel,
+            setThinkingLevel: (l: any) => (sessionResult.session as any).setThinkingLevel?.(l),
+            getSessionName: () => (sessionResult.session as any).sessionManager?.getSessionName?.(),
+            setSessionName: async (n: any) =>
+              (sessionResult.session as any).sessionManager?.setSessionName?.(n, "user"),
+          },
+          {
+            getModel: () => sessionResult.session.model,
+            isIdle: () => !sessionResult.session.isStreaming,
+            abort: () => {
+              sessionResult.session.abort({ reason: "User cancelled session" } as any);
+            },
+            hasPendingWork: () => false,
+            shutdown: async () => {
+              await sessionResult.session.dispose();
+            },
+            getContextUsage: () => undefined,
+            compact: async () => undefined,
+          },
+          undefined,
+          uiContext as any,
+          "interactive"
+        );
+      } catch {
+        // Safe fallback
+      }
+    }
+
+    return session;
   }
 
   async checkHealth(): Promise<EngineHealthResult> {
@@ -491,8 +942,8 @@ export class OmpAgentEngine implements AgentEngine {
       const probeResult = await createAgentSession({
         cwd: this.options.defaultWorkspacePath ?? process.cwd(),
         agentDir: this.options.defaultAgentDir ?? probeAgentDir,
-        sessionManager: SessionManager.inMemory(),
-        settings: Settings.isolated(),
+        sessionManager: SessionManager.inMemory(this.options.defaultWorkspacePath ?? process.cwd()),
+        settings: Settings.isolated({ "find.enabled": "on" }),
         disableExtensionDiscovery: true,
         enableMCP: false,
         enableLsp: false,

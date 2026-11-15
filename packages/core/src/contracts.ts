@@ -1,4 +1,4 @@
-import type { AgentEvent, AgentEventHandler, AgentStatus } from "./events.js";
+import type { AgentEvent, AgentEventHandler, AgentStatus, FileDiffData, ApprovalAnswer } from "./events.js";
 
 /**
  * Physical network locality classification of a provider or model.
@@ -133,6 +133,13 @@ export interface CreateSessionOptions {
   routingMode?: RoutingMode;
   allowCloud?: boolean;
   roleModelOverrides?: Partial<Record<AgentRole, string>>;
+  approvalMode?: "always-ask" | "auto" | "yolo";
+  onApprovalRequest?: (request: {
+    readonly id: string;
+    readonly toolName: string;
+    readonly prompt: { readonly full: string; readonly compact: string; readonly session?: string };
+    resolve: (answer: ApprovalAnswer) => void;
+  }) => void;
 }
 
 /**

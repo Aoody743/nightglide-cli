@@ -15,7 +15,14 @@ import { Composer } from "../components/Composer.js";
 import { AgentMonitor } from "../components/AgentMonitor.js";
 import { RoutingExplanation } from "../components/RoutingExplanation.js";
 import type { ScreenId } from "../components/Header.js";
-import type { TerminalDimensions } from "../dimensions.js";
+import {
+  type TerminalDimensions,
+  computeViewportCapacity,
+} from "../dimensions.js";
+import { ToolCard, ApprovalPromptView } from "../components/tools/index.js";
+import { DiffViewer } from "../components/diff/index.js";
+import { ThinkingIndicator, StreamingCursor } from "../components/motion/index.js";
+import type { FileDiffData, ApprovalAnswer } from "@nightglide/core";
 
 export interface ToolCallItem {
   id: string;
@@ -23,6 +30,7 @@ export interface ToolCallItem {
   input: Record<string, unknown>;
   result?: unknown;
   error?: string;
+  diff?: FileDiffData;
   status: "running" | "completed" | "error";
 }
 
@@ -35,6 +43,13 @@ export interface ChatMessage {
   isStreaming?: boolean;
 }
 
+export interface MarkdownCodeBlock {
+  type: "text" | "code";
+  content: string;
+  language?: string;
+  filename?: string;
+}
+
 export interface ChatScreenProps {
   theme: Theme;
   engine?: AgentEngine;
@@ -43,6 +58,8 @@ export interface ChatScreenProps {
   interactionMode?: InteractionMode;
   onToggleInteractionMode?: () => void;
   onSetInteractionMode?: (mode: InteractionMode) => void;
+  workspacePath?: string;
+  model?: string;
 }
 
 /**
@@ -136,6 +153,102 @@ export function formatToolResultSummary(toolName: string, result: unknown): stri
   return String(result);
 }
 
+/**
+ * Parses markdown message content into alternating text and fenced code blocks.
+ */
+export function parseMarkdownBlocks(text: string): MarkdownCodeBlock[] {
+  if (!text) return [];
+  const blocks: MarkdownCodeBlock[] = [];
+  const codeBlockRegex = /```([a-zA-Z0-9_\-\.\/]+)?(?:[ \t]+([^\r\n]+))?[\r\n]+([\s\S]*?)(?:```|$)/g;
+
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = codeBlockRegex.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      const textChunk = text.slice(lastIndex, match.index);
+      if (textChunk.trim()) {
+        blocks.push({ type: "text", content: textChunk });
+      }
+    }
+
+    const rawLang = match[1] || "";
+    const rawFile = match[2] || "";
+    const codeContent = match[3] || "";
+
+    blocks.push({
+      type: "code",
+      content: codeContent.trimEnd(),
+      language: rawLang || "code",
+      filename: rawFile || undefined,
+    });
+
+    lastIndex = match.index + match[0].length;
+  }
+
+  if (lastIndex < text.length) {
+    const trailing = text.slice(lastIndex);
+    if (trailing.trim()) {
+      blocks.push({ type: "text", content: trailing });
+    }
+  }
+
+  if (blocks.length === 0) {
+    blocks.push({ type: "text", content: text });
+  }
+
+  return blocks;
+}
+
+/**
+ * Integration seam for motion components (e.g. Horizon pulse during deliberation).
+ */
+export function HorizonPulseSeam({ theme, active = false }: { theme: Theme; active?: boolean }) {
+  return (
+    <box flexDirection="row" alignItems="center" gap={1} height={1}>
+      <text fg={active ? theme.colors.accent : theme.colors.border}>
+        {active ? "✦ ~ ~ ~ ~ ~ · ~ ~ ~ ~ ~ ✦" : "─────────────────────────────────────────────────────────────"}
+      </text>
+    </box>
+  );
+}
+
+/**
+ * Integration seam for diff comparison components.
+ */
+export function DiffPreviewSeam({
+  theme,
+  filename,
+  additions = 0,
+  deletions = 0,
+  diffText,
+}: {
+  theme: Theme;
+  filename: string;
+  additions?: number;
+  deletions?: number;
+  diffText?: string;
+}) {
+  return (
+    <box
+      flexDirection="column"
+      backgroundColor={theme.colors.surfaceElevated}
+      borderColor={theme.colors.border}
+      borderStyle="single"
+      paddingX={1}
+      marginY={0}
+    >
+      <box flexDirection="row" justifyContent="space-between">
+        <text fg={theme.colors.accent}>┌─ 🔍 DIFF PREVIEW: {filename}</text>
+        <text fg={theme.colors.textSecondary}>
+          (+{additions} / -{deletions})
+        </text>
+      </box>
+      {diffText ? <text fg={theme.colors.textPrimary}>{diffText}</text> : null}
+    </box>
+  );
+}
+
 export function ChatScreen({
   theme,
   engine,
@@ -143,6 +256,8 @@ export function ChatScreen({
   interactionMode = "guided",
   onToggleInteractionMode,
   onSetInteractionMode,
+  workspacePath,
+  model,
 }: ChatScreenProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
@@ -159,7 +274,23 @@ export function ChatScreen({
   const [subagents, setSubagents] = useState<SubagentMonitorItem[]>([]);
   const [routingDecision, setRoutingDecision] = useState<RoutingDecision | null>(null);
   const [showMonitor, setShowMonitor] = useState<boolean>(true);
+  const [pendingApproval, setPendingApproval] = useState<{
+    id: string;
+    toolName: string;
+    prompt: { full: string; compact: string; session?: string };
+    resolve: (answer: ApprovalAnswer) => void;
+  } | null>(null);
+
+  // Auto-scroll state machine
+  const [isAutoScrollLocked, setIsAutoScrollLocked] = useState<boolean>(true);
+  const [scrollOffset, setScrollOffset] = useState<number>(0);
+
   const sessionRef = useRef<AgentSession | null>(null);
+
+  // Calculate viewport capacity
+  const viewportCapacity = computeViewportCapacity(dimensions);
+  const isCompact = viewportCapacity.isCompact;
+  const maxMessages = viewportCapacity.maxVisibleMessages;
 
   // Initialize engine session if engine is supplied
   useEffect(() => {
@@ -172,8 +303,16 @@ export function ChatScreen({
     async function initSession() {
       try {
         const session = await engine!.createSession({
-          workspacePath: process.cwd(),
-          model: "qwen2.5-coder:7b",
+          workspacePath: workspacePath || process.cwd(),
+          ...(model ? { model } : {}),
+          onApprovalRequest: (req) => {
+            setPendingApproval({
+              id: req.id,
+              toolName: req.toolName,
+              prompt: req.prompt,
+              resolve: req.resolve,
+            });
+          },
         });
 
         if (!active) {
@@ -313,6 +452,7 @@ export function ChatScreen({
                 ...t,
                 result: event.result,
                 error: event.error,
+                diff: event.diff,
                 status: (event.error ? "error" : "completed") as "error" | "completed",
               };
             }
@@ -321,6 +461,15 @@ export function ChatScreen({
           return { ...msg, toolCalls: updatedTools };
         });
       });
+    } else if (event.type === "approval_request") {
+      setPendingApproval({
+        id: event.id,
+        toolName: event.toolName,
+        prompt: event.prompt,
+        resolve: event.resolve,
+      });
+    } else if (event.type === "approval_resolved") {
+      setPendingApproval(null);
     } else if (event.type === "error") {
       setStatus("error");
       setStatusMessage(event.error);
@@ -407,6 +556,10 @@ export function ChatScreen({
       setStatus("thinking");
       setStatusMessage("Synthesizing flight coordinates...");
 
+      // Automatically lock to bottom upon new prompt
+      setIsAutoScrollLocked(true);
+      setScrollOffset(0);
+
       if (sessionRef.current) {
         try {
           await sessionRef.current.sendMessage(prompt);
@@ -442,7 +595,12 @@ export function ChatScreen({
           });
           handleAgentEvent({
             type: "text_delta",
-            delta: `Nightglide analyzed your instruction: "${prompt}".\n\nAll engine contracts and themes are properly aligned. Ready to accelerate into the next flight segment!`,
+            delta:
+              `Nightglide analyzed your instruction: "${prompt}".\n\n` +
+              "```typescript packages/core/src/contracts.ts\n" +
+              "export interface AgentEngine {\n  readonly name: string;\n}\n" +
+              "```\n" +
+              "All engine contracts and themes are properly aligned. Ready to accelerate into the next flight segment!",
           });
           handleAgentEvent({ type: "done" });
         }, 750);
@@ -451,29 +609,98 @@ export function ChatScreen({
     [handleAgentEvent, interactionMode, onSetInteractionMode, onToggleInteractionMode]
   );
 
+  // Cancellation handler (Escape or Ctrl+C)
   const handleCancel = useCallback(async () => {
     if (sessionRef.current) {
-      await sessionRef.current.cancel();
+      try {
+        await sessionRef.current.cancel();
+      } catch {}
     }
     setStatus("cancelling");
     setStatusMessage("Flight halted by user.");
+
+    setMessages((prev) => {
+      const lastMsg = prev[prev.length - 1];
+      if (lastMsg && lastMsg.role === "assistant" && lastMsg.isStreaming) {
+        return [
+          ...prev.slice(0, -1),
+          {
+            ...lastMsg,
+            content:
+              lastMsg.content + "\n[■ Task cancelled by user via Ctrl+C / Esc]",
+            isStreaming: false,
+          },
+        ];
+      }
+      return [
+        ...prev,
+        {
+          id: "sys-cancel-" + Date.now(),
+          role: "system",
+          content: "[■ Task cancelled by user via Ctrl+C / Esc]",
+          timestamp: Date.now(),
+        },
+      ];
+    });
+
+    // Reset status to idle cleanly after brief notification
+    setTimeout(() => {
+      setStatus("idle");
+      setStatusMessage("");
+    }, 300);
   }, []);
 
-  // Keyboard shortcut listener for ChatScreen
+  // Jump to latest message and re-lock auto-scroll
+  const handleJumpToLatest = useCallback(() => {
+    setScrollOffset(0);
+    setIsAutoScrollLocked(true);
+  }, []);
+
+  // Keyboard shortcut listener for scrolling, monitor toggle, and navigation
   useKeyboard((key) => {
     if (key.ctrl && key.name === "m") {
       setShowMonitor((prev) => !prev);
-    } else if (key.name === "escape") {
+      return;
+    }
+
+    if (key.name === "escape") {
       if (status === "thinking" || status === "streaming" || status === "executing_tool") {
         handleCancel();
       }
+      return;
+    }
+
+    // Scroll up (PageUp or Up when inspecting)
+    if (key.name === "pageup") {
+      setIsAutoScrollLocked(false);
+      setScrollOffset((prev) => Math.min(Math.max(0, messages.length - maxMessages), prev + 3));
+      return;
+    }
+
+    // Scroll down (PageDown)
+    if (key.name === "pagedown") {
+      setScrollOffset((prev) => {
+        const next = Math.max(0, prev - 3);
+        if (next === 0) setIsAutoScrollLocked(true);
+        return next;
+      });
+      return;
+    }
+
+    // 'g' or 'G' key jumps to latest and re-locks auto-scroll
+    if ((key.name === "g" || key.name === "G") && !isAutoScrollLocked) {
+      handleJumpToLatest();
+      return;
     }
   });
 
-  // Calculate message count adaptively based on terminal height (e.g. 80x24, 100x30, 120x36)
-  const isCompact = dimensions?.isCompactHeight ?? false;
-  const maxMessages = isCompact ? 3 : (dimensions?.height ?? 30) < 34 ? 5 : 8;
-  const visibleMessages = messages.slice(-maxMessages);
+  // Calculate slice of visible messages accounting for auto-scroll and inspection
+  const total = messages.length;
+  const maxScroll = Math.max(0, total - maxMessages);
+  const effectiveOffset = Math.min(scrollOffset, maxScroll);
+  const endIndex = isAutoScrollLocked ? total : total - effectiveOffset;
+  const startIndex = Math.max(0, endIndex - maxMessages);
+  const visibleMessages = messages.slice(startIndex, endIndex);
 
   return (
     <box
@@ -502,7 +729,7 @@ export function ChatScreen({
         borderColor={theme.colors.border}
         borderStyle="single"
         paddingX={1}
-        paddingY={1}
+        paddingY={isCompact ? 0 : 1}
         gap={1}
       >
         {routingDecision ? (
@@ -514,7 +741,7 @@ export function ChatScreen({
             theme={theme}
             subagents={subagents}
             isOpen={showMonitor}
-            maxVisible={isCompact ? 2 : undefined}
+            maxVisible={isCompact ? 1 : 2}
             interactionMode={interactionMode}
           />
         ) : null}
@@ -542,6 +769,8 @@ export function ChatScreen({
           }
 
           if (msg.role === "assistant") {
+            const blocks = parseMarkdownBlocks(msg.content);
+
             return (
               <box
                 key={msg.id}
@@ -563,18 +792,33 @@ export function ChatScreen({
                   </text>
                 </box>
 
-                {/* Render Native OMP Tool Calls */}
+                {/* Render Native OMP Tool Calls via ToolCard */}
                 {msg.toolCalls?.map((tool) => {
-                  const toolIcon = getToolIcon(tool.toolName);
-                  const statusColor =
-                    tool.status === "completed"
-                      ? theme.colors.success
-                      : tool.status === "error"
-                      ? theme.colors.error
-                      : theme.colors.warning;
+                  try {
+                    return (
+                      <ToolCard
+                        key={tool.id}
+                        toolName={tool.toolName}
+                        toolCallId={tool.id}
+                        input={tool.input}
+                        result={tool.result}
+                        error={tool.error}
+                        diff={tool.diff}
+                        status={tool.status}
+                        mode={interactionMode === "expert" ? "compact" : "expanded"}
+                        theme={theme}
+                        dimensions={dimensions}
+                      />
+                    );
+                  } catch {
+                    const toolIcon = getToolIcon(tool.toolName);
+                    const statusColor =
+                      tool.status === "completed"
+                        ? theme.colors.success
+                        : tool.status === "error"
+                        ? theme.colors.error
+                        : theme.colors.warning;
 
-                  // Expert Mode: compact single-line execution summary
-                  if (interactionMode === "expert") {
                     return (
                       <box
                         key={tool.id}
@@ -588,110 +832,150 @@ export function ChatScreen({
                         marginY={0}
                       >
                         <box flexDirection="row" alignItems="center" gap={1}>
-                          <text fg={theme.colors.info}>{toolIcon} [{tool.toolName}]</text>
+                          <text fg={theme.colors.info}>
+                            {toolIcon} [{tool.toolName}]
+                          </text>
                           <text fg={theme.colors.textPrimary}>
                             {formatToolSummary(tool.toolName, tool.input)}
                           </text>
                         </box>
-                        <box flexDirection="row" alignItems="center" gap={1}>
-                          {tool.error ? (
-                            <text fg={theme.colors.error}>✖ {tool.error}</text>
-                          ) : tool.result !== undefined && tool.result !== null ? (
-                            <text fg={theme.colors.textSecondary}>
-                              {formatToolResultSummary(tool.toolName, tool.result)}
-                            </text>
+                        <text fg={statusColor}>● {tool.status.toUpperCase()}</text>
+                      </box>
+                    );
+                  }
+                })}
+
+                {/* Assistant Markdown and Prose Content */}
+                {blocks.map((block, idx) => {
+                  if (block.type === "code") {
+                    return (
+                      <box
+                        key={idx}
+                        flexDirection="column"
+                        backgroundColor={theme.colors.surfaceElevated}
+                        borderColor={theme.colors.border}
+                        borderStyle="single"
+                        paddingX={1}
+                        marginY={0}
+                      >
+                        <box flexDirection="row" justifyContent="space-between">
+                          <text fg={theme.colors.accentSecondary}>
+                            ┌─ {block.language || "Code"}
+                            {block.filename ? `: ${block.filename}` : ""}
+                          </text>
+                        </box>
+                        <box flexDirection="row" alignItems="center">
+                          <text fg={theme.colors.textPrimary}>{block.content}</text>
+                          {msg.isStreaming && idx === blocks.length - 1 ? (
+                            <StreamingCursor theme={theme} isStreaming={true} />
                           ) : null}
-                          <text fg={statusColor}>● {tool.status.toUpperCase()}</text>
                         </box>
                       </box>
                     );
                   }
 
-                  // Guided Mode: detailed parameter breakdown and results card
                   return (
-                    <box
-                      key={tool.id}
-                      flexDirection="column"
-                      borderColor={
-                        tool.status === "error"
-                          ? theme.colors.error
-                          : tool.status === "completed"
-                          ? theme.colors.success
-                          : theme.colors.info
-                      }
-                      borderStyle="single"
-                      backgroundColor={theme.colors.surfaceElevated}
-                      paddingX={1}
-                      marginY={0}
-                    >
-                      <box flexDirection="row" justifyContent="space-between">
-                        <box flexDirection="row" gap={1}>
-                          <text fg={theme.colors.info}>
-                            {toolIcon} [{tool.toolName}]
-                          </text>
-                          <text fg={theme.colors.textSecondary}>
-                            {formatToolSummary(tool.toolName, tool.input)}
-                          </text>
-                        </box>
-                        <text fg={statusColor}>
-                          {tool.status.toUpperCase()}
-                        </text>
-                      </box>
-                      <text fg={theme.colors.textMuted}>
-                        Input: {JSON.stringify(tool.input)}
-                      </text>
-                      {tool.result !== undefined && tool.result !== null ? (
-                        <text fg={theme.colors.textSecondary}>
-                          Result: {typeof tool.result === "string" ? tool.result : JSON.stringify(tool.result)}
-                        </text>
-                      ) : null}
-                      {tool.error ? (
-                        <text fg={theme.colors.error}>
-                          Error: {tool.error}
-                        </text>
+                    <box key={idx} paddingY={0} flexDirection="row" alignItems="center">
+                      <text fg={theme.colors.textPrimary}>{block.content}</text>
+                      {msg.isStreaming && idx === blocks.length - 1 ? (
+                        <StreamingCursor theme={theme} isStreaming={true} />
                       ) : null}
                     </box>
                   );
                 })}
-
-                {/* Assistant Text Content */}
-                {msg.content ? (
-                  <text fg={theme.colors.textPrimary}>{msg.content}</text>
-                ) : null}
               </box>
             );
           }
 
-          // System message
+          // System message (cancellations, errors, or notifications)
+          const isErrorMsg = msg.content.startsWith("✖");
+          const isCancelMsg = msg.content.includes("Task cancelled");
+
           return (
             <box
               key={msg.id}
               flexDirection="row"
               paddingX={1}
               backgroundColor={theme.colors.surfaceElevated}
+              borderColor={
+                isErrorMsg
+                  ? theme.colors.error
+                  : isCancelMsg
+                  ? theme.colors.warning
+                  : theme.colors.border
+              }
+              borderStyle={isErrorMsg || isCancelMsg ? "single" : undefined}
             >
-              <text fg={theme.colors.textMuted}>{msg.content}</text>
+              <text
+                fg={
+                  isErrorMsg
+                    ? theme.colors.error
+                    : isCancelMsg
+                    ? theme.colors.warning
+                    : theme.colors.textMuted
+                }
+              >
+                {msg.content}
+              </text>
             </box>
           );
         })}
 
         {status === "thinking" ? (
-          <box flexDirection="row" paddingX={1} gap={1}>
-            <text fg={theme.colors.warning}>⚡</text>
-            <text fg={theme.colors.warning}>
-              Deliberating solution and synthesizing flight coordinates...
-            </text>
+          <box flexDirection="column" gap={0}>
+            <HorizonPulseSeam theme={theme} active={true} />
+            <box flexDirection="row" paddingX={1} gap={1} alignItems="center">
+              <ThinkingIndicator
+                theme={theme}
+                label="Deliberating solution and synthesizing flight coordinates..."
+                active={true}
+              />
+            </box>
           </box>
         ) : null}
       </box>
 
-      {/* Composer Input Deck */}
-      <Composer
-        theme={theme}
-        onSubmit={handleSendMessage}
-        onCancel={handleCancel}
-        status={status}
-      />
+      {/* Unpinned Scroll Anchor Indicator */}
+      {!isAutoScrollLocked && (
+        <box
+          flexDirection="row"
+          justifyContent="center"
+          alignItems="center"
+          backgroundColor={theme.colors.selection}
+          borderColor={theme.colors.accent}
+          borderStyle="single"
+          paddingX={1}
+          height={1}
+        >
+          <text fg={theme.colors.accent}>
+            [↓ G: Jump to latest] (Auto-scroll released for inspection)
+          </text>
+        </box>
+      )}
+
+      {/* Composer Input Deck or Native Approval Gate */}
+      {pendingApproval ? (
+        <ApprovalPromptView
+          id={pendingApproval.id}
+          toolName={pendingApproval.toolName}
+          prompt={pendingApproval.prompt}
+          resolve={(answer) => {
+            pendingApproval.resolve(answer);
+            setPendingApproval(null);
+          }}
+          theme={theme}
+          dimensions={dimensions}
+        />
+      ) : (
+        <Composer
+          theme={theme}
+          onSubmit={handleSendMessage}
+          onCancel={handleCancel}
+          status={status}
+          dimensions={dimensions}
+          onToggleMode={onToggleInteractionMode}
+        />
+      )}
     </box>
   );
 }

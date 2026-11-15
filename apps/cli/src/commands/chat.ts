@@ -7,6 +7,7 @@ export interface ChatCommandOptions {
   engineType?: "omp" | "mock";
   initialScreen?: "welcome" | "chat" | "setup" | "themes";
   nonInteractive?: boolean;
+  motionMode?: "auto" | "reduced" | "off";
 }
 
 export async function runChatCommand(options: ChatCommandOptions = {}): Promise<void> {
@@ -15,28 +16,24 @@ export async function runChatCommand(options: ChatCommandOptions = {}): Promise<
   themeManager.setTheme(config.theme);
 
   let engine: AgentEngine;
-  if (options.engineType === "omp") {
+  if (options.engineType === "mock") {
+    engine = new MockAgentEngine();
+  } else {
+    // Default to real OMP Engine in M2
     engine = new OmpAgentEngine({
       baseUrl: config.providers.local?.baseUrl,
       model: config.model,
+      defaultWorkspacePath: process.cwd(),
     });
-  } else {
-    // Default to Mock Engine in M0 if model not explicitly configured
-    const isModelConfigured = Boolean(config.model && config.model.trim().length > 0);
-    if (isModelConfigured) {
-      engine = new OmpAgentEngine({
-        baseUrl: config.providers.local?.baseUrl,
-        model: config.model,
-      });
-    } else {
-      engine = new MockAgentEngine();
-    }
   }
+
+  const motionMode = options.motionMode ?? config.motion ?? "auto";
 
   if (options.nonInteractive || !process.stdin.isTTY) {
     console.log("=== NIGHTGLIDE CLI (Non-Interactive Mode) ===");
     console.log(`Active Engine: ${engine.id} (isMock: ${engine.isMock})`);
     console.log(`Active Theme: ${themeManager.getActiveTheme().name}`);
+    console.log(`Motion Mode: ${motionMode}`);
     console.log("Terminal is non-interactive. Use interactive terminal to launch OpenTUI.");
     return;
   }

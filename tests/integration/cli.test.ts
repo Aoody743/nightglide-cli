@@ -26,7 +26,7 @@ describe("CLI Integration Tests", () => {
     const output = await new Response(proc.stdout).text();
     await proc.exited;
 
-    expect(output).toContain("Nightglide v0.2.0");
+    expect(output).toContain("Nightglide v0.3.0");
   });
 
   test("CLI responds to providers command", async () => {

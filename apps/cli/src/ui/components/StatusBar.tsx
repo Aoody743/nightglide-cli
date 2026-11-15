@@ -1,7 +1,11 @@
 import React from "react";
 import type { Theme } from "@nightglide/themes";
 import type { AgentStatus } from "@nightglide/core";
-import type { TerminalDimensions } from "../dimensions.js";
+import {
+  type TerminalDimensions,
+  getTerminalTier,
+  getTierBadge,
+} from "../dimensions.js";
 
 export interface StatusBarProps {
   theme: Theme;
@@ -10,28 +14,30 @@ export interface StatusBarProps {
   status?: AgentStatus;
   dimensions?: TerminalDimensions;
   interactionMode?: "guided" | "expert";
+  onToggleHelp?: () => void;
 }
 
 export function StatusBar({
   theme,
   workspacePath = process.cwd(),
-  activeScreen = "welcome",
+  activeScreen = "chat",
   status = "idle",
   dimensions,
   interactionMode = "guided",
 }: StatusBarProps) {
-  const home = process.env.HOME || "";
-  const displayPath = home && workspacePath.startsWith(home)
-    ? "~" + workspacePath.slice(home.length)
-    : workspacePath;
+  const width = dimensions?.width ?? 100;
+  const height = dimensions?.height ?? 30;
+  const tier = dimensions?.tier ?? getTerminalTier(width, height);
+  const tierBadge = getTierBadge(tier);
 
-  const isCompact = dimensions?.isCompactWidth ?? false;
-  const isUltraCompact = (dimensions?.width ?? 100) < 85;
+  const isCompact = dimensions?.isCompactWidth ?? width < 100;
+  const isUltraCompact = width < 85;
 
-  // Truncate path if in compact mode
-  const formattedPath = isUltraCompact
-    ? displayPath.split("/").slice(-2).join("/")
-    : displayPath;
+  const modeLabel = interactionMode === "expert" ? "Expert" : "Guided";
+  const tierDisplay = `[${width}x${height} ${tierBadge}]`;
+  const modeDisplay = `[Mode: ${modeLabel}]`;
+  const themeDisplay = `[Theme: ${theme.name}]`;
+  const helpHint = "[?] Help";
 
   return (
     <box
@@ -43,76 +49,39 @@ export function StatusBar({
       borderColor={theme.colors.border}
       borderStyle="single"
       paddingX={1}
-      height={3}
+      height={1}
     >
-      {/* Navigation shortcuts */}
-      {isUltraCompact ? (
-        <box flexDirection="row" alignItems="center" gap={1}>
-          <text fg={theme.colors.accent}>[1-5]</text>
-          <text fg={theme.colors.textSecondary}>Tabs</text>
-          <text fg={theme.colors.border}>·</text>
-          <text fg={theme.colors.accentSecondary}>[Tab]</text>
-          <text fg={theme.colors.textSecondary}>Mode</text>
-          <text fg={theme.colors.border}>·</text>
-          <text fg={theme.colors.error}>[Q]</text>
-          <text fg={theme.colors.textMuted}>Exit</text>
-        </box>
-      ) : (
-        <box flexDirection="row" alignItems="center" gap={1}>
-          <text fg={theme.colors.accent}>[1]</text>
-          <text fg={theme.colors.textSecondary}>Home</text>
-          <text fg={theme.colors.border}>·</text>
-          <text fg={theme.colors.accent}>[2]</text>
-          <text fg={theme.colors.textSecondary}>Chat</text>
-          <text fg={theme.colors.border}>·</text>
-          <text fg={theme.colors.accent}>[3]</text>
-          <text fg={theme.colors.textSecondary}>Setup</text>
-          <text fg={theme.colors.border}>·</text>
-          <text fg={theme.colors.accent}>[4]</text>
-          <text fg={theme.colors.textSecondary}>Themes</text>
-          <text fg={theme.colors.border}>·</text>
-          <text fg={theme.colors.accent}>[5]</text>
-          <text fg={theme.colors.textSecondary}>Models</text>
-          <text fg={theme.colors.border}>·</text>
-          <text fg={theme.colors.accentSecondary}>[Tab]</text>
-          <text fg={theme.colors.textSecondary}>Mode</text>
-          <text fg={theme.colors.border}>·</text>
-          <text fg={theme.colors.error}>[Q]</text>
-          <text fg={theme.colors.textMuted}>Exit</text>
-        </box>
-      )}
-
-      {/* Workspace indicator */}
+      {/* Left side: Terminal Tier, Mode Indicator, Theme Name */}
       <box flexDirection="row" alignItems="center" gap={1}>
-        <text fg={theme.colors.accentSecondary}>⌂</text>
-        <text fg={theme.colors.textSecondary}>{formattedPath}</text>
+        <text fg={theme.colors.textMuted}>{tierDisplay}</text>
+        <text
+          fg={
+            interactionMode === "expert"
+              ? theme.colors.accentSecondary
+              : theme.colors.accent
+          }
+        >
+          {modeDisplay}
+        </text>
+        <text fg={theme.colors.textSecondary}>{themeDisplay}</text>
       </box>
 
-      {/* Active Mode & Theme */}
-      {!isUltraCompact ? (
-        <box flexDirection="row" alignItems="center" gap={1}>
-          <text fg={theme.colors.textMuted}>Mode:</text>
-          <text
-            fg={
-              interactionMode === "expert"
-                ? theme.colors.accentSecondary
-                : theme.colors.accent
-            }
-          >
-            {interactionMode === "expert" ? "Expert" : "Guided"}
-          </text>
-          <text fg={theme.colors.border}>│</text>
-          <text fg={theme.colors.textMuted}>Theme:</text>
-          <text fg={theme.colors.accent}>{theme.name}</text>
-          <text fg={theme.colors.textMuted}>({theme.type})</text>
-        </box>
-      ) : (
-        <box flexDirection="row" alignItems="center" gap={1}>
-          <text fg={theme.colors.accent}>
-            {interactionMode === "expert" ? "[Exp]" : "[Gld]"}
-          </text>
-        </box>
-      )}
+      {/* Right side: Navigation hint, Help toggle hint */}
+      <box flexDirection="row" alignItems="center" gap={1}>
+        {!isCompact && (
+          <>
+            <text fg={theme.colors.textMuted}>[Tab] Switch Mode</text>
+            <text fg={theme.colors.border}>·</text>
+          </>
+        )}
+        <text fg={theme.colors.accentSecondary}>{helpHint}</text>
+        {!isUltraCompact && (
+          <>
+            <text fg={theme.colors.border}>·</text>
+            <text fg={theme.colors.textMuted}>[Ctrl+C] Exit</text>
+          </>
+        )}
+      </box>
     </box>
   );
 }

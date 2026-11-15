@@ -277,6 +277,7 @@ export function App({
               interactionMode={interactionMode}
               onToggleInteractionMode={handleToggleInteractionMode}
               onSetInteractionMode={handleSetInteractionMode}
+              workspacePath={workspacePath}
             />
           )}
 

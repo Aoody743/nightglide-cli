@@ -4,6 +4,7 @@ export const DEFAULT_CONFIG: NightglideConfig = {
   version: 1,
   theme: "midnight-flight",
   interactionMode: "guided",
+  motion: "auto",
   provider: "local",
   model: "",
   providers: {
