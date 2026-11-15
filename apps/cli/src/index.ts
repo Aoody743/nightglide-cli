@@ -2,13 +2,15 @@
 import { printDoctorReport } from "./commands/doctor.js";
 import { runDemoCommand } from "./commands/demo.js";
 import { runChatCommand } from "./commands/chat.js";
+import { runProvidersCommand } from "./commands/providers.js";
+import { runModelsCommand } from "./commands/models.js";
 
-const VERSION = "0.1.0 (M0 Foundation)";
+const VERSION = "0.2.0 (M1 Multi-Provider & Agent Collaboration)";
 
 function printHelp(): void {
   console.log(`
   ==============================================================
-    NIGHTGLIDE — AI Coding CLI
+    NIGHTGLIDE — Multi-Provider & Agent Collaboration CLI
     "Build beyond the horizon." / "漫翔苍穹，构筑所想。"
     Version: ${VERSION}
   ==============================================================
@@ -18,8 +20,10 @@ function printHelp(): void {
 
   COMMANDS:
     (default)       Launch the Nightglide interactive TUI
-    demo            Launch deterministic streaming UI demonstration (No API key needed)
-    doctor          Run system, toolchain, and provider diagnostic health check
+    demo            Launch collaborative multi-agent simulation (No API key needed)
+    providers       List configured local & cloud providers and probe connection status
+    models          Display available models, capabilities, and agent role mappings
+    doctor          Run system, toolchain, and multi-provider health diagnostics
     chat            Launch chat directly in conversation mode
     --help, -h      Display this help reference
     --version, -v   Print version information
@@ -27,6 +31,8 @@ function printHelp(): void {
   EXAMPLES:
     $ nightglide
     $ nightglide demo
+    $ nightglide providers
+    $ nightglide models
     $ nightglide doctor
   `);
 }
@@ -38,6 +44,14 @@ async function main(): Promise<void> {
   switch (command) {
     case "doctor":
       await printDoctorReport();
+      break;
+
+    case "providers":
+      await runProvidersCommand();
+      break;
+
+    case "models":
+      await runModelsCommand();
       break;
 
     case "demo":

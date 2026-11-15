@@ -161,6 +161,7 @@ export function SetupScreen({ theme, onNavigate }: SetupScreenProps) {
             <text fg={theme.colors.accent}>[1] Welcome</text>
             <text fg={theme.colors.accent}>[2] Launch Chat</text>
             <text fg={theme.colors.accent}>[4] Themes</text>
+            <text fg={theme.colors.accent}>[5] Model Matrix</text>
           </box>
         </box>
       </box>

@@ -47,6 +47,9 @@ export function StatusBar({
         <text fg={theme.colors.accent}>[4]</text>
         <text fg={theme.colors.textSecondary}>Themes</text>
         <text fg={theme.colors.border}>·</text>
+        <text fg={theme.colors.accent}>[5]</text>
+        <text fg={theme.colors.textSecondary}>Models</text>
+        <text fg={theme.colors.border}>·</text>
         <text fg={theme.colors.error}>[Q]</text>
         <text fg={theme.colors.textMuted}>Exit</text>
       </box>

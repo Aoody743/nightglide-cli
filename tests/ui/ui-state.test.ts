@@ -33,6 +33,8 @@ export class ChatStateReducer {
   status: AgentStatus = "idle";
   statusMessage = "";
   activeTool?: string;
+  subagents: Array<{ id: string; role: string; model: string; status: string; task: string }> = [];
+  latestRoutingDecision?: any;
 
   constructor(initialMessages: ChatMessage[] = []) {
     this.messages = [...initialMessages];
@@ -58,6 +60,32 @@ export class ChatStateReducer {
 
   applyEvent(event: AgentEvent): void {
     switch (event.type) {
+      case "routing_decision":
+        this.latestRoutingDecision = event.decision;
+        break;
+
+      case "subagent_start":
+        this.subagents.push({
+          id: event.subagentId,
+          role: event.role,
+          model: event.model,
+          status: "thinking",
+          task: event.task,
+        });
+        break;
+
+      case "subagent_delta": {
+        const sub = this.subagents.find((s) => s.id === event.subagentId);
+        if (sub) sub.status = "streaming";
+        break;
+      }
+
+      case "subagent_end": {
+        const sub = this.subagents.find((s) => s.id === event.subagentId);
+        if (sub) sub.status = "completed";
+        break;
+      }
+
       case "status":
         this.status = event.status;
         if (event.message) {
@@ -156,7 +184,7 @@ export class ChatStateReducer {
 }
 
 describe("UI Navigation & Screen State Logic", () => {
-  type ScreenId = "welcome" | "chat" | "setup" | "themes";
+  type ScreenId = "welcome" | "chat" | "setup" | "themes" | "models";
 
   function routeKeyToScreen(
     currentScreen: ScreenId,
@@ -180,6 +208,9 @@ describe("UI Navigation & Screen State Logic", () => {
         case "4":
         case "t":
           return "themes";
+        case "5":
+        case "m":
+          return "models";
         case "q":
           return "exit";
         default:
@@ -189,10 +220,12 @@ describe("UI Navigation & Screen State Logic", () => {
       if (key.ctrl && key.name === "1") return "welcome";
       if (key.ctrl && key.name === "3") return "setup";
       if (key.ctrl && key.name === "4") return "themes";
+      if (key.ctrl && key.name === "5") return "models";
       if (key.name === "f1") return "welcome";
       if (key.name === "f2") return "chat";
       if (key.name === "f3") return "setup";
       if (key.name === "f4") return "themes";
+      if (key.name === "f5") return "models";
       return null;
     }
   }
@@ -209,6 +242,8 @@ describe("UI Navigation & Screen State Logic", () => {
     expect(routeKeyToScreen("welcome", { name: "s" })).toBe("setup");
     expect(routeKeyToScreen("welcome", { name: "4" })).toBe("themes");
     expect(routeKeyToScreen("welcome", { name: "t" })).toBe("themes");
+    expect(routeKeyToScreen("welcome", { name: "5" })).toBe("models");
+    expect(routeKeyToScreen("welcome", { name: "m" })).toBe("models");
     expect(routeKeyToScreen("welcome", { name: "1" })).toBe("welcome");
     expect(routeKeyToScreen("welcome", { name: "q" })).toBe("exit");
   });
@@ -404,5 +439,56 @@ describe("Message Accumulation from AgentEvent Streams", () => {
     state.cancel();
     expect(state.status).toBe("cancelling");
     expect(state.messages[1].isStreaming).toBe(false);
+  });
+
+  test("accumulates routing decision and subagent lifecycle events", () => {
+    const state = new ChatStateReducer();
+    state.addUserMessage("Refactor auth module");
+
+    state.applyEvent({
+      type: "routing_decision",
+      decision: {
+        taskCategory: "plan",
+        agentRole: "plan",
+        providerId: "openai",
+        modelId: "openai/gpt-4o",
+        locality: "remote",
+        mode: "BALANCED",
+        reason: "Complex architectural planning",
+        requiresCloud: true,
+        requiresApproval: false,
+        fallbackChain: [],
+      },
+    });
+
+    expect(state.latestRoutingDecision).toBeDefined();
+    expect(state.latestRoutingDecision.modelId).toBe("openai/gpt-4o");
+
+    state.applyEvent({
+      type: "subagent_start",
+      subagentId: "sub_001",
+      role: "explore",
+      model: "omlx/qwen2.5-coder",
+      locality: "local",
+      task: "Inspect source files",
+    });
+
+    expect(state.subagents.length).toBe(1);
+    expect(state.subagents[0].status).toBe("thinking");
+
+    state.applyEvent({
+      type: "subagent_delta",
+      subagentId: "sub_001",
+      delta: "Scanned files",
+    });
+    expect(state.subagents[0].status).toBe("streaming");
+
+    state.applyEvent({
+      type: "subagent_end",
+      subagentId: "sub_001",
+      result: "Done",
+      totalTokens: 100,
+    });
+    expect(state.subagents[0].status).toBe("completed");
   });
 });

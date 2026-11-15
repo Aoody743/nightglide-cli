@@ -1,9 +1,10 @@
 import os from "node:os";
 import { loadConfig } from "@nightglide/config";
+import { ProviderRegistry } from "@nightglide/providers";
 
 export interface DiagnosticItem {
   name: string;
-  category: "system" | "runtime" | "sdk" | "config" | "inference";
+  category: "system" | "runtime" | "sdk" | "config" | "providers" | "routing";
   status: "pass" | "warn" | "fail" | "info";
   message: string;
   details?: string;
@@ -54,7 +55,7 @@ export async function runDiagnostics(): Promise<DoctorReport> {
       name: "OMP SDK (@oh-my-pi/pi-coding-agent)",
       category: "sdk",
       status: "pass",
-      message: "18.20.2 (createAgentSession, SessionManager, Settings 已就绪)",
+      message: "18.20.2 (createAgentSession, subagentEventBus, task delegation 已就绪)",
     });
   } catch (err) {
     items.push({
@@ -83,52 +84,56 @@ export async function runDiagnostics(): Promise<DoctorReport> {
     });
   }
 
-  // 4. Nightglide Configuration
+  // 4. Nightglide Configuration & Routing
   try {
     const config = await loadConfig();
     items.push({
       name: "Nightglide Config",
       category: "config",
       status: "pass",
-      message: `Active Theme: ${config.theme} | Mode: ${config.interactionMode} | Provider: ${config.provider}`,
+      message: `Theme: ${config.theme} | Interaction: ${config.interactionMode}`,
     });
 
-    // 5. Local Inference Probe
-    const localBaseUrl = config.providers.local?.baseUrl || "http://127.0.0.1:8000/v1";
-    try {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 1200);
-      const res = await fetch(`${localBaseUrl.replace(/\/v1\/?$/, "")}/v1/models`, {
-        signal: controller.signal,
-      }).catch((e) => {
-        return null;
-      });
-      clearTimeout(timeout);
+    // 5. Multi-Provider Registry Diagnostics
+    const registry = new ProviderRegistry();
+    for (const [id, pConfig] of Object.entries(config.providers)) {
+      try {
+        registry.register(id, pConfig);
+      } catch {}
+    }
 
-      if (res && (res.status === 200 || res.status === 401)) {
-        items.push({
-          name: "Local Inference Server (oMLX/Local)",
-          category: "inference",
-          status: res.status === 200 ? "pass" : "info",
-          message:
-            res.status === 200
-              ? `在线就绪 (${localBaseUrl})`
-              : `服务在线 (端口响应正常，需要 API Key: ${localBaseUrl})`,
-        });
-      } else {
-        items.push({
-          name: "Local Inference Server",
-          category: "inference",
-          status: "info",
-          message: `未检测到端口响应 (${localBaseUrl})。TUI 演示模式与 Mock 引擎可免模型直接运行。`,
-        });
-      }
-    } catch {
+    const report = registry.getDiagnosticReport();
+    items.push({
+      name: "Multi-Provider Registry",
+      category: "providers",
+      status: "pass",
+      message: `${report.providers.length} 个提供商注册 (${report.localProvidersCount} 本地, ${report.cloudProvidersCount} 云端)`,
+    });
+
+    // 6. Intelligent Workload Router
+    const modeStatus =
+      config.routing.mode === "LOCAL"
+        ? "LOCAL 模式 (纯离线隐私保护，禁止任何外部流量)"
+        : `${config.routing.mode} 模式 (云端授权: ${config.routing.allowCloud ? "允许" : "受限"})`;
+
+    items.push({
+      name: "Workload Model Router",
+      category: "routing",
+      status: "pass",
+      message: modeStatus,
+    });
+
+    // 7. Probe configured local endpoint
+    const localProvider = registry.get("local") || registry.get("omlx");
+    if (localProvider) {
+      const probe = await registry.checkConnection(localProvider.id, 1500);
       items.push({
-        name: "Local Inference Server",
-        category: "inference",
-        status: "info",
-        message: "本地模型服务未运行，已启用确定性演示引擎保护",
+        name: `Local Inference (${localProvider.name})`,
+        category: "providers",
+        status: probe.connected ? "pass" : "info",
+        message: probe.connected
+          ? `服务在线就绪 (${localProvider.baseUrl})`
+          : `端口响应 (${probe.message})`,
       });
     }
   } catch (err) {
@@ -151,7 +156,7 @@ export async function runDiagnostics(): Promise<DoctorReport> {
 
 export async function printDoctorReport(): Promise<void> {
   console.log("\n========================================================");
-  console.log("  NIGHTGLIDE DOCTOR — 系统与运行时环境健康诊断");
+  console.log("  NIGHTGLIDE DOCTOR — 系统与多模型协同健康诊断");
   console.log("  'Build beyond the horizon.'");
   console.log("========================================================\n");
 
@@ -169,7 +174,7 @@ export async function printDoctorReport(): Promise<void> {
 
   console.log("\n--------------------------------------------------------");
   if (report.allHealthy) {
-    console.log("诊断结论: 核心环境健康就绪。您可运行 `bun run dev` 或 `bun run demo`。");
+    console.log("诊断结论: 核心环境与多模型协同架构健康就绪。您可运行 `bun run dev` 或 `bun run demo`。");
   } else {
     console.log("诊断结论: 检测到部分依赖或环境异常，请参考上方提示解决。");
   }

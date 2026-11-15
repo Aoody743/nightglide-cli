@@ -1,7 +1,7 @@
 import React from "react";
 import type { Theme } from "@nightglide/themes";
 
-export type ScreenId = "welcome" | "chat" | "setup" | "themes";
+export type ScreenId = "welcome" | "chat" | "setup" | "themes" | "models";
 
 export interface HeaderProps {
   activeScreen: ScreenId;
@@ -21,6 +21,7 @@ const NAV_TABS: readonly NavTab[] = [
   { id: "chat", key: "2", label: "Flight Deck" },
   { id: "setup", key: "3", label: "Setup" },
   { id: "themes", key: "4", label: "Themes" },
+  { id: "models", key: "5", label: "Model Matrix" },
 ] as const;
 
 export function Header({

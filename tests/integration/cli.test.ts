@@ -26,7 +26,33 @@ describe("CLI Integration Tests", () => {
     const output = await new Response(proc.stdout).text();
     await proc.exited;
 
-    expect(output).toContain("Nightglide v0.1.0");
+    expect(output).toContain("Nightglide v0.2.0");
+  });
+
+  test("CLI responds to providers command", async () => {
+    const proc = Bun.spawn(["bun", "run", "apps/cli/src/index.ts", "providers"], {
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+
+    const output = await new Response(proc.stdout).text();
+    await proc.exited;
+
+    expect(output).toContain("NIGHTGLIDE PROVIDERS");
+    expect(output).toContain("端点状态");
+  });
+
+  test("CLI responds to models command", async () => {
+    const proc = Bun.spawn(["bun", "run", "apps/cli/src/index.ts", "models"], {
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+
+    const output = await new Response(proc.stdout).text();
+    await proc.exited;
+
+    expect(output).toContain("NIGHTGLIDE MODELS");
+    expect(output).toContain("角色分配");
   });
 
   test("runDiagnostics returns valid structured report", async () => {

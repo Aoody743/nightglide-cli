@@ -5,9 +5,13 @@ import type {
   AgentSession,
   AgentEvent,
   AgentStatus as StatusType,
+  SubagentMonitorItem,
+  RoutingDecision,
 } from "@nightglide/core";
 import { AgentStatus } from "../components/AgentStatus.js";
 import { Composer } from "../components/Composer.js";
+import { AgentMonitor } from "../components/AgentMonitor.js";
+import { RoutingExplanation } from "../components/RoutingExplanation.js";
 import type { ScreenId } from "../components/Header.js";
 
 export interface ToolCallItem {
@@ -47,6 +51,9 @@ export function ChatScreen({ theme, engine }: ChatScreenProps) {
   const [status, setStatus] = useState<StatusType>("idle");
   const [statusMessage, setStatusMessage] = useState<string>("");
   const [activeTool, setActiveTool] = useState<string | undefined>(undefined);
+  const [subagents, setSubagents] = useState<SubagentMonitorItem[]>([]);
+  const [routingDecision, setRoutingDecision] = useState<RoutingDecision | null>(null);
+  const [showMonitor, setShowMonitor] = useState<boolean>(true);
   const sessionRef = useRef<AgentSession | null>(null);
 
   // Initialize engine session if engine is supplied
@@ -93,7 +100,48 @@ export function ChatScreen({ theme, engine }: ChatScreenProps) {
 
   // Handle stream events
   const handleAgentEvent = useCallback((event: AgentEvent) => {
-    if (event.type === "status") {
+    if (event.type === "routing_decision") {
+      setRoutingDecision(event.decision);
+    } else if (event.type === "subagent_start") {
+      setSubagents((prev) => {
+        const existing = prev.find((s) => s.id === event.subagentId);
+        if (existing) {
+          return prev.map((s) => (s.id === event.subagentId ? { ...s, status: "thinking" } : s));
+        }
+        return [
+          ...prev,
+          {
+            id: event.subagentId,
+            role: event.role,
+            model: event.model,
+            providerId: event.providerId || "omp",
+            locality: event.locality,
+            task: event.task,
+            status: "thinking",
+            startedAt: Date.now(),
+          },
+        ];
+      });
+    } else if (event.type === "subagent_delta") {
+      setSubagents((prev) =>
+        prev.map((s) => (s.id === event.subagentId ? { ...s, status: "streaming" } : s))
+      );
+    } else if (event.type === "subagent_end") {
+      setSubagents((prev) =>
+        prev.map((s) =>
+          s.id === event.subagentId
+            ? {
+                ...s,
+                status: event.error ? "error" : "completed",
+                result: event.result,
+                error: event.error,
+                totalTokens: event.totalTokens,
+                endedAt: Date.now(),
+              }
+            : s
+        )
+      );
+    } else if (event.type === "status") {
       setStatus(event.status);
       if (event.message) {
         setStatusMessage(event.message);
@@ -295,6 +343,14 @@ export function ChatScreen({ theme, engine }: ChatScreenProps) {
         paddingY={1}
         gap={1}
       >
+        {routingDecision ? (
+          <RoutingExplanation theme={theme} decision={routingDecision} />
+        ) : null}
+
+        {subagents.length > 0 ? (
+          <AgentMonitor theme={theme} subagents={subagents} isOpen={showMonitor} />
+        ) : null}
+
         {visibleMessages.map((msg) => {
           if (msg.role === "user") {
             return (

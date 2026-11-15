@@ -8,6 +8,7 @@ import { ThemeSelector } from "./components/ThemeSelector.js";
 import { WelcomeScreen } from "./screens/WelcomeScreen.js";
 import { SetupScreen } from "./screens/SetupScreen.js";
 import { ChatScreen } from "./screens/ChatScreen.js";
+import { ModelAssignmentView } from "./screens/ModelAssignmentView.js";
 
 export interface AppProps {
   initialScreen?: ScreenId;
@@ -67,6 +68,8 @@ export function App({
         setActiveScreen("setup");
       } else if (key.name === "4" || key.name === "t") {
         setActiveScreen("themes");
+      } else if (key.name === "5" || key.name === "m") {
+        setActiveScreen("models");
       } else if (key.name === "q") {
         handleExit();
       }
@@ -78,6 +81,8 @@ export function App({
         setActiveScreen("setup");
       } else if (key.ctrl && key.name === "4") {
         setActiveScreen("themes");
+      } else if (key.ctrl && key.name === "5") {
+        setActiveScreen("models");
       } else if (key.name === "f1") {
         setActiveScreen("welcome");
       } else if (key.name === "f2") {
@@ -86,6 +91,8 @@ export function App({
         setActiveScreen("setup");
       } else if (key.name === "f4") {
         setActiveScreen("themes");
+      } else if (key.name === "f5") {
+        setActiveScreen("models");
       }
     }
   });
@@ -137,6 +144,13 @@ export function App({
             theme={theme}
             onSelectTheme={handleSelectTheme}
             onClose={() => setActiveScreen("welcome")}
+          />
+        )}
+
+        {activeScreen === "models" && (
+          <ModelAssignmentView
+            theme={theme}
+            onNavigate={setActiveScreen}
           />
         )}
       </box>
