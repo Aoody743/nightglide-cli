@@ -335,6 +335,33 @@ export class ProviderRegistry {
         }
 
         if (resp.status === 200) {
+          let discoveredCount = 0;
+          try {
+            const contentType = resp.headers.get("content-type") || "";
+            if (contentType.includes("json")) {
+              const body = await resp.json();
+              const list = Array.isArray(body?.data)
+                ? body.data
+                : Array.isArray(body?.models)
+                ? body.models
+                : [];
+              for (const item of list) {
+                const modelId = typeof item === "string" ? item : item.id || item.name;
+                if (modelId) {
+                  this.registerModel(provider.id, modelId, {
+                    name: typeof item === "object" && item.name ? item.name : modelId,
+                    contextWindow: typeof item === "object" ? item.max_model_len : undefined,
+                    isDefault: discoveredCount === 0,
+                  });
+                  discoveredCount++;
+                }
+              }
+              if (provider.models.length > 0 && !provider.defaultModel) {
+                provider.defaultModel = provider.models[0].id;
+              }
+            }
+          } catch {}
+
           const result = {
             connected: true,
             status: 200,

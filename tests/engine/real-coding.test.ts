@@ -542,7 +542,7 @@ describe("Real Native Coding Integration & Verification", () => {
       try {
         const session = await engine.createSession({
           workspacePath: os.tmpdir(),
-          model: "omlx/qwen2.5-coder-7b",
+          model: "omlx/endless",
         });
 
         const receivedEvents: AgentEvent[] = [];

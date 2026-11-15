@@ -67,7 +67,7 @@ export function validateConfig(raw: unknown): ValidationResult<NightglideConfig>
           type: (typeof pObj.type === "string" ? pObj.type : "openai-compatible") as ProviderEndpointConfig["type"],
           baseUrl: typeof pObj.baseUrl === "string" ? pObj.baseUrl : "http://127.0.0.1:8000/v1",
           displayName: typeof pObj.displayName === "string" ? pObj.displayName : undefined,
-          apiKey: typeof pObj.apiKey === "string" ? pObj.apiKey : undefined,
+          apiKey: typeof pObj.apiKey === "string" ? pObj.apiKey : (key === "local" ? "sk-local" : undefined),
           apiKeyEnv: typeof pObj.apiKeyEnv === "string" ? pObj.apiKeyEnv : undefined,
           locality: pObj.locality === "remote" ? "remote" : "local",
           enabled: typeof pObj.enabled === "boolean" ? pObj.enabled : true,

@@ -849,12 +849,43 @@ export class OmpAgentEngine implements AgentEngine {
 
     const sessionResult = await createAgentSession(sessionOptions);
 
+    // Register local model provider into OMP model registry
+    const reg = sessionResult.session.modelRegistry;
+    const baseUrl = this.options.baseUrl || "http://127.0.0.1:8000/v1";
+    const apiKey = process.env.OMLX_API_KEY || "sk-local";
+    try {
+      reg.registerProvider("omlx", {
+        api: "openai-chat",
+        baseUrl,
+        apiKey,
+        models: [
+          {
+            id: "endless",
+            name: "endless",
+            reasoning: true,
+            supportsTools: true,
+            contextWindow: 262144,
+          },
+        ],
+      });
+    const targetModel = options.model ?? this.options.model ?? this.options.defaultModel;
+    if (!sessionResult.session.model && targetModel) {
+      const cleanId = targetModel.replace(/^omlx\//, "");
+      const found = reg.find("omlx", cleanId);
+      if (found) {
+        await sessionResult.session.setModel(found);
+      }
+    }
+    } catch {
+      // Safe fallback
+    }
+
     const resolvedModel =
       sessionResult.session.model?.id ??
       options.model ??
       this.options.model ??
       this.options.defaultModel ??
-      "omp-default";
+      "omlx/endless";
 
     const session = new OmpAgentSession(
       sessionResult.session,
@@ -950,6 +981,26 @@ export class OmpAgentEngine implements AgentEngine {
       });
 
       try {
+        const reg = probeResult.session.modelRegistry;
+        const baseUrl = this.options.baseUrl || "http://127.0.0.1:8000/v1";
+        const apiKey = process.env.OMLX_API_KEY || "sk-local";
+        try {
+          reg.registerProvider("omlx", {
+            api: "openai-chat",
+            baseUrl,
+            apiKey,
+            models: [
+              {
+                id: "endless",
+                name: "endless",
+                reasoning: true,
+                supportsTools: true,
+                contextWindow: 262144,
+              },
+            ],
+          });
+        } catch {}
+
         const discoverable = probeResult.session.modelRegistry.getDiscoverableProviders();
         const authedProviders = discoverable.filter((p) =>
           probeResult.session.modelRegistry.hasConcreteAuth(p)

@@ -13,6 +13,7 @@ export const DEFAULT_CONFIG: NightglideConfig = {
       baseUrl: "http://127.0.0.1:8000/v1",
       displayName: "Local Inference (oMLX/Local)",
       locality: "local",
+      apiKey: "sk-local",
       enabled: true,
       defaultModel: "",
     },
