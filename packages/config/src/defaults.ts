@@ -10,8 +10,24 @@ export const DEFAULT_CONFIG: NightglideConfig = {
     local: {
       type: "openai-compatible",
       baseUrl: "http://127.0.0.1:8000/v1",
+      displayName: "Local Inference (oMLX/Local)",
+      locality: "local",
+      enabled: true,
       defaultModel: "",
     },
+  },
+  routing: {
+    mode: "LOCAL",
+    allowCloud: false,
+    roleAssignments: {
+      main: "",
+      explore: "",
+      plan: "",
+      implement: "",
+      review: "",
+      scout: "",
+    },
+    maxConcurrency: 2,
   },
   permissions: {
     readOnly: true,

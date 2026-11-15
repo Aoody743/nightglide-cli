@@ -52,3 +52,39 @@ export class SecurityPermissionError extends NightglideError {
     this.operation = operation;
   }
 }
+
+export class ProviderUnavailableError extends EngineError {
+  readonly providerId: string;
+
+  constructor(providerId: string, message = `Provider '${providerId}' is unreachable or unavailable.`) {
+    super(message, "PROVIDER_UNAVAILABLE", true);
+    this.name = "ProviderUnavailableError";
+    this.providerId = providerId;
+  }
+}
+
+export class RoutingPolicyViolationError extends SecurityPermissionError {
+  readonly policy: string;
+
+  constructor(policy: string, message = `Task routing violated privacy or security policy: ${policy}`) {
+    super("ROUTING_POLICY", message);
+    this.name = "RoutingPolicyViolationError";
+    this.policy = policy;
+  }
+}
+
+export class CloudAuthorizationRequiredError extends SecurityPermissionError {
+  readonly modelId: string;
+  readonly providerId: string;
+
+  constructor(
+    modelId: string,
+    providerId: string,
+    message = `Cloud model '${modelId}' on provider '${providerId}' requires explicit user authorization.`
+  ) {
+    super("CLOUD_AUTHORIZATION", message);
+    this.name = "CloudAuthorizationRequiredError";
+    this.modelId = modelId;
+    this.providerId = providerId;
+  }
+}

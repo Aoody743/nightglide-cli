@@ -3,6 +3,8 @@
  * Used across Mock Engine, OMP Adapter, and UI Subscribers.
  */
 
+import type { AgentRole, ProviderLocality, RoutingDecision } from "./contracts.js";
+
 export type AgentStatus =
   | "idle"
   | "thinking"
@@ -41,6 +43,31 @@ export type AgentEvent =
   | {
       readonly type: "done";
       readonly summary?: string;
+      readonly totalTokens?: number;
+    }
+  | {
+      readonly type: "routing_decision";
+      readonly decision: RoutingDecision;
+    }
+  | {
+      readonly type: "subagent_start";
+      readonly subagentId: string;
+      readonly role: AgentRole;
+      readonly model: string;
+      readonly task: string;
+      readonly providerId?: string;
+      readonly locality: ProviderLocality;
+    }
+  | {
+      readonly type: "subagent_delta";
+      readonly subagentId: string;
+      readonly delta: string;
+    }
+  | {
+      readonly type: "subagent_end";
+      readonly subagentId: string;
+      readonly result?: unknown;
+      readonly error?: string;
       readonly totalTokens?: number;
     };
 

@@ -19,6 +19,57 @@ describe("Configuration Package", () => {
     expect(DEFAULT_CONFIG.provider).toBe("local");
     expect(DEFAULT_CONFIG.permissions.readOnly).toBe(true);
     expect(DEFAULT_CONFIG.providers.local.baseUrl).toBe("http://127.0.0.1:8000/v1");
+    expect(DEFAULT_CONFIG.routing.mode).toBe("LOCAL");
+    expect(DEFAULT_CONFIG.routing.allowCloud).toBe(false);
+    expect(DEFAULT_CONFIG.routing.roleAssignments.main).toBe("");
+  });
+
+  test("validateConfig handles multi-provider and routing configurations", () => {
+    const raw = {
+      version: 1,
+      theme: "aurora",
+      interactionMode: "expert",
+      provider: "local",
+      model: "test-model",
+      providers: {
+        local: {
+          type: "openai-compatible",
+          baseUrl: "http://127.0.0.1:8000/v1",
+          locality: "local",
+          displayName: "oMLX Local",
+        },
+        cloud_openai: {
+          type: "openai-compatible",
+          baseUrl: "https://api.openai.com/v1",
+          locality: "remote",
+          displayName: "OpenAI Cloud",
+          apiKeyEnv: "OPENAI_API_KEY",
+        },
+      },
+      routing: {
+        mode: "BALANCED",
+        allowCloud: true,
+        roleAssignments: {
+          main: "cloud_openai/gpt-4o",
+          explore: "local/qwen2.5-coder",
+        },
+        maxConcurrency: 3,
+      },
+      permissions: {
+        readOnly: false,
+        requireToolConfirmation: true,
+        allowShellExecution: false,
+      },
+    };
+
+    const res = validateConfig(raw);
+    expect(res.success).toBe(true);
+    expect(res.data?.providers.cloud_openai).toBeDefined();
+    expect(res.data?.providers.cloud_openai.locality).toBe("remote");
+    expect(res.data?.routing.mode).toBe("BALANCED");
+    expect(res.data?.routing.allowCloud).toBe(true);
+    expect(res.data?.routing.roleAssignments.main).toBe("cloud_openai/gpt-4o");
+    expect(res.data?.routing.maxConcurrency).toBe(3);
   });
 
   test("validateConfig handles valid object", () => {

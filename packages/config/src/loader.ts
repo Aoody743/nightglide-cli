@@ -1,8 +1,14 @@
 import os from "node:os";
 import path from "node:path";
 import fs from "node:fs/promises";
-import type { NightglideConfig, InteractionMode, ProviderEndpointConfig } from "./schema.js";
+import type {
+  NightglideConfig,
+  InteractionMode,
+  ProviderEndpointConfig,
+  RoutingConfig,
+} from "./schema.js";
 import { DEFAULT_CONFIG } from "./defaults.js";
+import type { AgentRole, RoutingMode } from "@nightglide/core";
 
 /**
  * Determine the user configuration directory in a cross-platform manner.
@@ -54,6 +60,11 @@ export function validateConfig(raw: unknown): ValidationResult<NightglideConfig>
         providers[key] = {
           type: (typeof pObj.type === "string" ? pObj.type : "openai-compatible") as ProviderEndpointConfig["type"],
           baseUrl: typeof pObj.baseUrl === "string" ? pObj.baseUrl : "http://127.0.0.1:8000/v1",
+          displayName: typeof pObj.displayName === "string" ? pObj.displayName : undefined,
+          apiKey: typeof pObj.apiKey === "string" ? pObj.apiKey : undefined,
+          apiKeyEnv: typeof pObj.apiKeyEnv === "string" ? pObj.apiKeyEnv : undefined,
+          locality: pObj.locality === "remote" ? "remote" : "local",
+          enabled: typeof pObj.enabled === "boolean" ? pObj.enabled : true,
           defaultModel: typeof pObj.defaultModel === "string" ? pObj.defaultModel : undefined,
         };
       }
@@ -61,6 +72,32 @@ export function validateConfig(raw: unknown): ValidationResult<NightglideConfig>
   } else {
     providers.local = { ...DEFAULT_CONFIG.providers.local };
   }
+
+  // Routing config
+  const rawRouting = (obj.routing && typeof obj.routing === "object" ? obj.routing : {}) as Record<string, unknown>;
+  const validModes: RoutingMode[] = ["LOCAL", "BALANCED", "PERFORMANCE", "MANUAL"];
+  const routingMode: RoutingMode = validModes.includes(rawRouting.mode as RoutingMode)
+    ? (rawRouting.mode as RoutingMode)
+    : DEFAULT_CONFIG.routing.mode;
+
+  const rawRoleAssignments = (rawRouting.roleAssignments && typeof rawRouting.roleAssignments === "object"
+    ? rawRouting.roleAssignments
+    : {}) as Record<string, unknown>;
+  const roleAssignments: Partial<Record<AgentRole, string>> = {
+    ...DEFAULT_CONFIG.routing.roleAssignments,
+  };
+  for (const [r, m] of Object.entries(rawRoleAssignments)) {
+    if (typeof m === "string") {
+      roleAssignments[r as AgentRole] = m;
+    }
+  }
+
+  const routing: RoutingConfig = {
+    mode: routingMode,
+    allowCloud: typeof rawRouting.allowCloud === "boolean" ? rawRouting.allowCloud : DEFAULT_CONFIG.routing.allowCloud,
+    roleAssignments,
+    maxConcurrency: typeof rawRouting.maxConcurrency === "number" ? rawRouting.maxConcurrency : DEFAULT_CONFIG.routing.maxConcurrency,
+  };
 
   const rawPerms = (obj.permissions && typeof obj.permissions === "object" ? obj.permissions : {}) as Record<string, unknown>;
   const permissions = {
@@ -84,6 +121,7 @@ export function validateConfig(raw: unknown): ValidationResult<NightglideConfig>
       provider,
       model,
       providers,
+      routing,
       permissions,
     },
     errors: errors.length > 0 ? errors : undefined,
