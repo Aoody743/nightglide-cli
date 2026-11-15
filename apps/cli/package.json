@@ -9,7 +9,7 @@
     "dev": "bun run src/index.ts",
     "demo": "bun run src/index.ts demo",
     "doctor": "bun run src/index.ts doctor",
-    "build": "bun build src/index.ts --target bun --outfile dist/nightglide",
+    "build": "bun build src/index.ts --target bun --outfile dist/nightglide.js --external '@opentui/*' --external '@oh-my-pi/*' --external 'omp-legacy-pi-modules'",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
