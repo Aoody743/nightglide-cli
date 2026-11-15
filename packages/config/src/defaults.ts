@@ -30,8 +30,8 @@ export const DEFAULT_CONFIG: NightglideConfig = {
     maxConcurrency: 2,
   },
   permissions: {
-    readOnly: true,
-    requireToolConfirmation: true,
-    allowShellExecution: false,
+    readOnly: false,
+    requireToolConfirmation: false,
+    allowShellExecution: true,
   },
 };

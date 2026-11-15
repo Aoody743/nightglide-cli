@@ -25,7 +25,7 @@ flowchart TD
 
 ### 核心安全目标
 1. **指令意图与执行权限逻辑隔离:** 大模型的推理与文本生成仅仅产生“意图请求”，在架构设计上绝对不赋予大模型对底层操作系统的直接物理执行特权。
-2. **底层防篡改权限门禁 (Below-the-Prompt Enforcement):** 权限决策必须硬编码在代码层与执行层，绝不依赖大模型的文本自律。
+2. **原生执行引擎与工具审批机制 (Native Engine & Tool Approval):** 底层工具执行与沙箱审批完全由 OMP 原生驱动与保障，绝不依赖大模型的文本自律，亦无需构建脆弱的多余自定义拦截层。
 3. **数据主权与严密隐私防护 (Privacy-First Data Sovereignty):** 用户代码与敏感私钥默认不出机，严禁隐式遥测上传。
 
 ---
@@ -35,7 +35,7 @@ flowchart TD
 ### 2.1 传统“提示词安全”的失效陷阱
 许多传统 AI Agent 试图通过在 System Prompt 中写入“请不要删除用户文件”、“请不要执行危险命令”来保证安全。这种设计在面对恶意构建的代码注释（间接提示词注入，Indirect Prompt Injection）或越狱模板时极其脆弱。一旦大模型被攻击者绕过，便会发出危险的工具调用指令。
 
-### 2.2 Nightglide “提示词之下”硬门禁架构 (Below-the-Prompt Enforcement)
+### 2.2 原生 OMP 工具审批与终端呈现流转 (Native Tool Approval & TUI Flow)
 
 ```mermaid
 flowchart LR
@@ -45,10 +45,13 @@ flowchart LR
         ToolCall["工具调用请求\n(例如 edit, write, bash)"]
     end
 
-    subgraph DefenseGate ["代码级安全看门狗 (Below-the-Prompt Gatekeeper)"]
-        Gatekeeper["Security Gatekeeper\n(硬编码 TypeScript 校验)"]
-        Whitelist["权限策略与白名单\n(config.permissions)"]
-        UserPrompt["终端人机阻断确认\n(Interactive Terminal UI)"]
+    subgraph OMPNative ["原生 OMP 执行与审批层 (OMP SDK Engine)"]
+        ApprovalEngine["OMP Approval Engine\n(原生工具审批决策)"]
+        ToolSandbox["OMP Tool Execution\n(原生工具运行时)"]
+    end
+
+    subgraph UIZone ["Nightglide TUI 呈现层 (apps/cli)"]
+        UserPrompt["终端人机确认卡片\n(Interactive Terminal UI)"]
     end
 
     subgraph ExecutionZone ["受保护物理系统 (Protected System)"]
@@ -58,17 +61,18 @@ flowchart LR
 
     LLM --> ToolCall
     Prompt --> LLM
-    ToolCall --> Gatekeeper
-    Gatekeeper --> Whitelist
-    Whitelist -- "需要审批" --> UserPrompt
-    UserPrompt -- "用户按键 [y]" --> Disk
+    ToolCall --> ApprovalEngine
+    ApprovalEngine -- "触发审批" --> UserPrompt
+    UserPrompt -- "用户按键 [y]" --> ToolSandbox
     UserPrompt -- "用户拒绝 [n]" --> LLM
-    Whitelist -- "越权/违规" --> Intercept["强行拦截并抛出 SecurityPermissionError"]
+    ToolSandbox --> Disk
+    ToolSandbox --> Shell
 ```
 
-- **代码级拦截与确定性执行原则 (Deterministic Enforcement):**
-  - `Gatekeeper` 运行于 Node/Bun 原生进程内，纯通过不可被文本篡改的代码逻辑执行拦截。
-  - 即使大模型被完全越狱并坚称“用户已授权执行 `rm -rf /`”，`Gatekeeper` 检测到未获得当前物理按键签名，将立即硬性驳回。
+- **原生审批机制与交互原则 (Native Approval & Deterministic UX):**
+  - 底层工具的注册、调用执行与权限审批由 OMP 原生内核完全接管。
+  - Nightglide 表现层不重新发明脆弱的“4层代码拦截器”，而是无缝接入 OMP 原生审批体系，在 TUI 中呈现高可读性的参数详情与确认卡片。
+  - 即使大模型被完全越狱并坚称“用户已授权执行 `rm -rf /`”，OMP 原生审批与 Nightglide TUI 未收到物理按键确认前，任何高危工具均无法提交执行。
 
 ---
 
@@ -187,10 +191,12 @@ Nightglide 践行纯粹的开源与隐私理念：
   - 任务失败时的 Fallback 回退链中**严禁包含任何 remote 云端模型**；
   - 若所有本地端点均不可用，系统立即抛出 `ProviderUnavailableError` 显式终止，绝不允许“善意”隐式降级至第三方云端。
 
-### 6.4 请求前调度策略守卫 (`assertDispatchModel`)
-在底层 OMP 请求发送前，Nightglide 注册了不可逆的 `assertDispatchModel` 策略守卫：
-- 每次会话中的任意底层网络请求发出前，守卫函数检查目标模型的网络端点与当前授权策略。
-- 若处于 `LOCAL` 模式或 `allowCloud: false` 时模型试图调用非本地 Provider，守卫函数直接抛出 `RoutingPolicyViolationError`，在应用运行时调度层强制阻断请求发出。
+### 6.4 路由策略优先判定与隐私合规分派 (Policy-Based Routing & Local Compliance)
+在模型分派阶段，Nightglide 由 `@nightglide/routing` 中的 `WorkloadModelRouter` 实施严格的策略判定：
+- 任务派发前，路由器根据当前激活模式严格筛选模型候选集；
+- 当处于 `LOCAL` 模式或未开启云端授权（`allowCloud: false`）时，路由器仅允许经物理判定为 `local` 的端点参与；
+- 若选定模型为 `remote` 物理端点但未获得云端授权，路由器立即抛出 `CloudAuthorizationRequiredError`；
+- 在 M1.2 架构重构中，移除了脆弱的底层自定义 TS 网络拦截钩子 (`assertDispatchModel`)，完全依靠确定性的策略路由与端点物理 Locality 解析实现更健壮、无侵入的本地隐私保护。
 
 ---
 

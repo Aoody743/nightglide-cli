@@ -187,7 +187,7 @@ export interface RoutingDecision {
 
 在本地与云端模型协同工作流中（例如：本地 Explorer 扫描源码 -> 云端 Planner 编制规划）：
 1. **最小上下文原则 (Least Privilege Context)：** Explorer 只返回经提炼的结构大纲、关键符号及摘要，禁止将未授权的源码完整 dump 直接投递至云端。
-2. **硬拦截器集成 (`assertDispatchModel`)：** 在每次向底层驱动请求前，Nightglide 会触发 `assertDispatchModel(model)` 钩子，校验选定模型是否完全符合当前会话的隐私许可。
+2. **策略路由确定性隐私门禁 (Policy-Based Privacy Gate)：** 在任务派发阶段，`WorkloadModelRouter` 依据物理网络 Locality 严格执行合规约束。在 `LOCAL` 模式下仅分派物理本地模型，回退候选链中绝不包含云端模型；在 `BALANCED` 模式下若未经 `allowCloud: true` 授权，绝不分派云端模型并安全失败（Fail-Closed）。子智能体派发与执行完全由 OMP 原生驱动，Nightglide 专注于透明的路由决策与状态呈现。*(注：M1.2 架构重构移除了脆弱的自定义 TS 网络拦截钩子 `assertDispatchModel`，由路由层策略决策接管)*
 
 ---
 

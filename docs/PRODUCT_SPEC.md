@@ -28,8 +28,8 @@ flowchart LR
    - 拒绝“参数地狱”与强迫记忆。无论是初始化项目、修改代码还是排查 Bug，用户只需以自然语言表达意图，系统提供智能向导与实时感知。
    - 兼顾新手友好的引导模式（Guided Mode）与高阶工程师热爱的极速专家模式（Expert Mode）。
 2. **确定可控与安全沙箱 (Deterministic & Safe):**
-   - 坚决杜绝 AI “脱缰”带来的破坏性后果。所有文件写操作、Git 提交和终端 Shell 命令执行均受底层独立权限看门狗控制。
-   - 权限决策位于 Prompt 提示词层之下（Below-the-Prompt），不受模型幻觉或提示词注入（Prompt Injection）干扰。
+   - 坚决杜绝 AI “脱缰”带来的破坏性后果。底层依托原生 OMP SDK 的原生工具审批与执行沙箱机制，所有文件修改与 Shell 执行均需严格经过原生审批流程。
+   - Nightglide 表现层提供优雅清晰的确认与 Diff 对比展示，绝不绕过原生安全防护，亦无需构建脆弱的多余自定义拦截层。
 3. **本地优先与模型自由 (Local & Cloud Freedom):**
    - 深度拥抱端侧算力与隐私计算，无缝支持 Apple Silicon 优化的 oMLX、Ollama 及任意兼容 OpenAI 接口标准的本地推理集群。
    - 用户拥有绝对数据主权：私钥安全存取，敏感代码零外发。
@@ -102,7 +102,7 @@ flowchart LR
 | 痛点维度 | 传统 CLI / 脚本工具 | 主流闭源 IDE 插件 | **Nightglide 终极解法** |
 | :--- | :--- | :--- | :--- |
 | **交互界面与视觉体验** | 纯 ANSI 单色文本，日志滚屏极快，无法回看与聚焦，界面生硬冰冷。 | 嵌在复杂 IDE 边栏中，割裂终端专注流，占用高额 GUI 内存。 | **OpenTUI 声明式终端渲染**，苍穹语义主题系统，极具电影感的美学与微动效。 |
-| **安全与权限边界** | 往往给予无限制的 Bash 执行权限，一不小心可能执行 `rm -rf`。 | 权限逻辑封装在云端，无法对特定本地操作实施离线拦截。 | **底层防篡改权限看门狗**，工具执行白名单，二次确认弹窗与原子变更。 |
+| **安全与权限边界** | 往往给予无限制的 Bash 执行权限，一不小心可能执行 `rm -rf`。 | 权限逻辑封装在云端，无法对特定本地操作实施离线拦截。 | **原生 OMP 工具审批与 TUI 人机确认**，原生工具权限白名单与二次确认交互。 |
 | **模型自由度与隐私** | 强绑定特定供应商（如 OpenAI 或 Claude），无法切换端侧私有引擎。 | 必须登录专属账号，代码片段需上传至供应商服务器进行上下文分析。 | **本地模型优先架构**，原生支持 oMLX/Ollama，配置文件与密钥严格本地受控。 |
 | **跨技能层级友好度** | 参数繁琐晦涩（如 `--flags` 堆叠），仅适合少数专家用户。 | 适合日常但缺乏定制性，无法按需灵活介入底层执行链。 | **双模态无缝切换**（小白向导引导 vs 专家极速透传），适应全阶段开发者。 |
 | **确定性与测试能力** | 依赖真实网络与付费 Token，测试困难且结果具备不确定性。 | 无法离线单测，CI/CD 集成成本高。 | 内置 **Deterministic MockAgentEngine**，零成本驱动完整 UI 测试与离线演示。 |
@@ -117,7 +117,7 @@ Nightglide 按照模块化架构划分以下 8 大核心功能集合：
 flowchart TD
     CLI["CLI 入口与路由 (FR-1)"] --> Shell["TUI 交互运行时 (FR-2)"]
     Shell --> Engine["代理引擎抽象与会话 (FR-3)"]
-    Engine --> Security["工具拦截与权限看门狗 (FR-4)"]
+    Engine --> Security["原生工具审批与 TUI 交互 (FR-4)"]
     Engine --> Diff["代码变更与工作区保护 (FR-5)"]
     Shell --> Config["配置与凭证安全存储 (FR-6)"]
     Shell --> Themes["苍穹主题渲染系统 (FR-7)"]
@@ -148,12 +148,12 @@ flowchart TD
   - 确定性模拟引擎 `MockAgentEngine`：内置典型代码编写场景模拟，输出逐字流式文本与工具调用，无需任何外部网络。
   - 隔离上游适配器 `OmpAgentEngine`：基于 `@oh-my-pi/pi-coding-agent`，实施隔离设置、内存会话与环境脱钩。
 
-### FR-4: 工具权限拦截与确定性看门狗
-- **描述:** 在代理试图发起系统或文件交互时实施强力拦截与二次审计。
-- **白名单分类:**
-  - **只读操作 (Read-only):** `read`, `find`, `grep` —— 在安全模式下默认允许执行并向用户报告执行概要。
-  - **写入操作 (Write-back):** `edit`, `write` —— 强制捕获待修改内容，生成 Diff 并暂停会话，等待用户键盘确认。
-  - **命令执行 (Command Execution):** `bash` —— 受到最严格审查，默认禁用；开启时逐条展示完整执行语句与工作目录，经显式敲击 `y` 确认后方可提交子进程。
+### FR-4: 原生工具执行与人机审批交互
+- **描述:** 依托 OMP 原生工具执行引擎与审批机制，在终端 TUI 提供清晰的可视化审批确认。
+- **工具分类与审批交互:**
+  - **只读操作 (Read-only):** `read`, `find`, `grep` —— 原生只读分析工具，向用户呈现执行概要与定位结果。
+  - **写入与修改操作 (Write & Edit):** `edit`, `write` —— 原生编码修改工具，执行前触发工具审批，TUI 呈现待修改内容与确认状态。
+  - **命令执行 (Command Execution):** `bash` —— 原生 Shell 执行工具，触发原生工具审批，TUI 呈现命令全貌与工作目录，经用户敲击确认后方可执行。
 
 ### FR-5: 代码变更对比与工作区保护
 - **描述:** 防范模型幻觉导致的毁灭性代码覆盖。
@@ -196,7 +196,7 @@ flowchart TD
 ### FR-10: 工作负载感知模型智能路由 (`WorkloadModelRouter`)
 - **描述:** 依据任务意图、复杂度和严格的隐私合规要求，智能调度最适模型。
 - **4 类运行模式:**
-  - **`LOCAL`:** 纯离线隐私保护模式。仅使用本地回环端点模型，应用调度层确定性拦截任何未授权外网请求，确保数据不出机。
+  - **`LOCAL`:** 纯离线隐私保护模式。仅使用本地回环端点模型，路由层从源头保证仅分派物理本地模型，且回退候选链绝不包含云端端点，确保数据不出机。
   - **`BALANCED`:** 默认推荐模式。常规轻量检索/解释在本地端侧运行；高复杂度规划与评审任务在用户显式开启云端授权时协同云端强模型。
   - **`PERFORMANCE`:** 性能优先模式。首选具备最高推理能力的模型，且必须严格在用户授权预算内运行。
   - **`MANUAL`:** 手动模式。严格执行用户针对 `MAIN`、`EXPLORE`、`PLAN`、`IMPLEMENT`、`REVIEW` 各角色显式指定的模型，严禁任何未授权静默替换。
@@ -303,7 +303,8 @@ quadrantChart
 ### 7.2 里程碑演进路线规范 (Milestone Evolution)
 - **M0 (Engineering Foundation & UX):** 架构基石、Monorepo 搭建、OMP 上游隔离封装、苍穹设计系统与 OpenTUI 终端交互、免 Key 演示模式与诊断工具（已完成）。
 - **M1 (Multi-Provider Intelligence & Agent Collaboration):** 多提供商注册表、工作负载感知智能模型路由（LOCAL / BALANCED / PERFORMANCE / MANUAL）、本地与云端多 Agent 协同流水线、Agent Monitor 与 Model Assignment 矩阵（已完成）。
-- **M1.1 (Audit Remediation & Real Capability Verification):** 独立安全审计整改、0.0.0.0 与网络 Locality 严密判定、子智能体 Below-the-Prompt 权限隔离、MANUAL 模式零静默替换与强类型异常、WCAG AA 终端对比度全量合规、真实终端多尺寸验证与文档一致性矫正（当前基线）。
+- **M1.1 (Audit Remediation & Real Capability Verification):** 独立安全审计整改、0.0.0.0 与网络 Locality 严密判定、MANUAL 模式零静默替换与强类型异常、WCAG AA 终端对比度全量合规、真实终端多尺寸验证与文档一致性矫正（已完成）。
+- **M1.2 (Native OMP Restoration & Architecture Simplification):** 架构简化与原生 OMP 能力回归。彻底移除多余的自定义 4 层 Below-the-Prompt 工具拦截器、强制 `tools.approval: deny` 注入以及人为禁用 Reviewer/Task/Sonic 等脆弱机制；确立 Nightglide 作为轻量 SDK 适配器、TUI 呈现与多提供商路由器的职责边界，原生工具执行、原生审批与子智能体执行完全由 OMP 原生接管（当前基线）。
 - **M2 (Safe File Editing & Sandbox Workflows):** 受控代码修改工具（`edit`, `write`）、语法着色 Diff 审查与终端人机审批、Git Worktree 临时工作区沙箱与原子写盘。
 - **M3 (Advanced Developer Experience & Self-Healing):** 项目代码库全局上下文索引、智能 Git 提交与 PR 描述生成、编译/单测报错自愈修正循环。
 - **M4 (Public Distribution & Ecosystem):** 跨平台独立二进制打包分发、Homebrew/npm 一键安装、第三方能力与插件生态。

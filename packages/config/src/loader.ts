@@ -6,6 +6,7 @@ import type {
   InteractionMode,
   ProviderEndpointConfig,
   RoutingConfig,
+  SecurityPermissionConfig,
 } from "./schema.js";
 import { DEFAULT_CONFIG } from "./defaults.js";
 import type { AgentRole, RoutingMode } from "@nightglide/core";
@@ -113,17 +114,25 @@ export function validateConfig(raw: unknown): ValidationResult<NightglideConfig>
     maxConcurrency: typeof rawRouting.maxConcurrency === "number" ? rawRouting.maxConcurrency : DEFAULT_CONFIG.routing.maxConcurrency,
   };
 
-  const rawPerms = (obj.permissions && typeof obj.permissions === "object" ? obj.permissions : {}) as Record<string, unknown>;
-  const permissions = {
-    readOnly: typeof rawPerms.readOnly === "boolean" ? rawPerms.readOnly : DEFAULT_CONFIG.permissions.readOnly,
+  // Permissions configuration: optional and backward-compatible.
+  // Defaults to writable (readOnly: false) ensuring no orphan/strict permission constraints block legitimate OMP tool operations.
+  const rawPerms = (obj.permissions && typeof obj.permissions === "object" && !Array.isArray(obj.permissions)
+    ? (obj.permissions as Record<string, unknown>)
+    : undefined);
+
+  const permissions: SecurityPermissionConfig = {
+    readOnly:
+      typeof rawPerms?.readOnly === "boolean"
+        ? rawPerms.readOnly
+        : (DEFAULT_CONFIG.permissions?.readOnly ?? false),
     requireToolConfirmation:
-      typeof rawPerms.requireToolConfirmation === "boolean"
+      typeof rawPerms?.requireToolConfirmation === "boolean"
         ? rawPerms.requireToolConfirmation
-        : DEFAULT_CONFIG.permissions.requireToolConfirmation,
+        : (DEFAULT_CONFIG.permissions?.requireToolConfirmation ?? false),
     allowShellExecution:
-      typeof rawPerms.allowShellExecution === "boolean"
+      typeof rawPerms?.allowShellExecution === "boolean"
         ? rawPerms.allowShellExecution
-        : DEFAULT_CONFIG.permissions.allowShellExecution,
+        : (DEFAULT_CONFIG.permissions?.allowShellExecution ?? true),
   };
 
   return {

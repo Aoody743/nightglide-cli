@@ -428,7 +428,17 @@ export class MockAgentEngine implements AgentEngine {
       details: {
         mode: "simulation",
         status: "ready",
-        supportedTools: ["read", "task"],
+        supportedTools: [
+          "read",
+          "write",
+          "edit",
+          "bash",
+          "task",
+          "glob",
+          "grep",
+          "wait",
+          "todo",
+        ],
       },
     };
   }

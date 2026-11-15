@@ -19,7 +19,9 @@ nightglide/
 │   ├── core/                # 契约核心: 纯接口、判别联合事件、标准异常体系
 │   ├── themes/              # 苍穹设计系统: 语义色彩 Token、预设主题与主题管理器
 │   ├── config/              # 配置与持久化: XDG 规范路径、JSON Schema 校验与凭据解析
-│   └── engine/              # 引擎实现: 确定性 Mock 引擎与上游 OMP SDK 隔离适配器
+│   ├── providers/           # 提供商管理: Provider 注册表、端点物理 Locality 解析与连通性探针
+│   ├── routing/             # 智能路由: 任务分类、4 大运行模式决策与模型角色分配
+│   └── engine/              # 引擎实现: 确定性 Mock 引擎与上游 OMP SDK 轻量适配器
 └── tests/                   # 自动化测试套件: 引擎测试、配置测试、主题测试与端到端集成测试
 ```
 
@@ -32,7 +34,9 @@ flowchart TD
     CLI["apps/cli\n(终端应用入口与 TUI 视图)"]
     Config["packages/config\n(配置 Schema 与解析)"]
     Themes["packages/themes\n(主题色彩 Token 与管理器)"]
-    Engine["packages/engine\n(Mock 引擎与 OMP 适配器)"]
+    Providers["packages/providers\n(提供商注册表与 Locality)"]
+    Routing["packages/routing\n(任务分类与模型路由器)"]
+    Engine["packages/engine\n(Mock 引擎与 OMP 薄适配器)"]
     Core["packages/core\n(纯契约、事件联合体与异常树)"]
     UpstreamOMP["@oh-my-pi/pi-coding-agent\n(上游 SDK 内部实现)"]
     OpenTUI["@opentui/core & @opentui/react\n(终端渲染库)"]
@@ -40,10 +44,20 @@ flowchart TD
     CLI --> Core
     CLI --> Themes
     CLI --> Config
+    CLI --> Providers
+    CLI --> Routing
     CLI --> Engine
     CLI --> OpenTUI
 
+    Routing --> Providers
+    Routing --> Config
+    Routing --> Core
+
+    Providers --> Config
+    Providers --> Core
+
     Engine --> Core
+    Engine --> Routing
     Engine --> UpstreamOMP
 
     Config --> Core
@@ -55,6 +69,7 @@ flowchart TD
 1. **严禁逆向与跨层穿透:** `packages/core` 为纯基础抽象层，**绝对禁止依赖任何同级包或外部第三方框架**。
 2. **严禁上游泄漏至表现层:** `apps/cli` 内的任何组件或文件，**绝对禁止直接 `import` 来自 `@oh-my-pi/pi-coding-agent` 的任何类、类型或函数**。所有的上游交互必须经由 `packages/engine` 封装为 `packages/core` 契约后暴露。
 3. **严禁循环引用:** 模块间禁止存在间接或直接的循环引用（使用 TypeScript 编译器结合构建工具检测循环依赖）。
+4. **严格薄适配器原则 (Thin Adapter Principle):** `packages/engine` 是原生 OMP SDK 的轻量适配层，负责会话隔离与标准化事件流转换。严禁在引擎层构建脆弱的自定义 4 层 Below-the-Prompt 工具拦截器、强制 `tools.approval: deny` 注入、或通过 `task.disabledAgents` 人为屏蔽上游合法 Agent（如 `reviewer`、`task`、`sonic` 等）。原生工具执行、工具可用性、原生工具审批与子智能体执行完全由 OMP 原生驱动；Nightglide 专注于 TUI 呈现、苍穹主题、提供商管理与策略路由。
 
 ---
 

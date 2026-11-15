@@ -14,11 +14,11 @@ export interface ModelAssignmentViewProps {
 
 const ROLES: Array<{ role: AgentRole; label: string; desc: string }> = [
   { role: "main", label: "MAIN", desc: "Primary conversational coordinator & synthesizer" },
+  { role: "plan", label: "PLANNER", desc: "Deep architectural reasoning & refactor planning (Planner)" },
+  { role: "review", label: "REVIEWER", desc: "Independent code quality & security review (Reviewer)" },
+  { role: "scout", label: "SCOUT", desc: "Lightweight file & symbol search agent (Scout)" },
+  { role: "implement", label: "TASK", desc: "Native coding, refactoring & subagent execution (Task)" },
   { role: "explore", label: "EXPLORE", desc: "Fast on-device repository context exploration" },
-  { role: "plan", label: "PLAN", desc: "Deep architectural reasoning & refactor planning" },
-  { role: "implement", label: "IMPLEMENT", desc: "Code generation, modifications & bug fixing" },
-  { role: "review", label: "REVIEW", desc: "Independent code quality & security review" },
-  { role: "scout", label: "SCOUT", desc: "Lightweight file & symbol search agent" },
 ];
 
 const MODES: RoutingMode[] = ["LOCAL", "BALANCED", "PERFORMANCE", "MANUAL"];

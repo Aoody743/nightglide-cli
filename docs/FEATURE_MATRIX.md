@@ -2,9 +2,11 @@
 
 > **"Build beyond the horizon." / "漫翔苍穹，构筑所想。"**  
 > *状态标识说明:*  
-> - `IMPLEMENTED`: 核心代码已编写并通过全量自动化测试验证 (M0 / M1 / M1.1 阶段已完成)  
+> - `IMPLEMENTED`: 核心代码已编写并通过全量自动化测试验证 (M0 / M1 / M1.1 / M1.2 阶段已完成)  
 > - `SDK VERIFIED`: 真实 OMP SDK 运行时、SessionManager、Settings 与事件总线已实测验证  
 > - `LIVE VERIFIED`: 经由已配置的真实本地与云端模型端点执行实时推理与协同验证  
+> - `OMP NATIVE`: 由上游 OMP SDK 原生提供并驱动，Nightglide 薄适配接入  
+> - `REMOVED (M1.2)`: 自定义拦截/防火墙层在 M1.2 架构简化与原生回归中废弃移除  
 > - `PARTIAL`: 功能已部分实现但尚存已知边界  
 > - `BLOCKED`: 外部依赖、物理端点或未提供凭据导致暂无法完成真实调用 (如真实多模型协同)  
 > - `PLANNED`: 已纳入后续里程碑规划 (M2 - M4)
@@ -28,9 +30,9 @@
 | 特性编号 | 功能名称 | 功能描述 | 用户与架构价值 | 优先级 | 目标里程碑 | 依赖项 | 验收标准 (Acceptance Criteria) | 状态 |
 | :--- | :--- | :--- | :--- | :---: | :---: | :--- | :--- | :---: |
 | `FEAT-ENG-001` | 确定性模拟引擎 | 内置 `MockAgentEngine`，模拟单模型与多智能体（本地 Explore + 云端 Plan）协同。 | 允许在无 API Key、无网络连接的离线环境下完整运行 UI 与测试。 | P0 | M0/M1 | `FEAT-CORE-001` | 1. 严格按照步长流式分发事件；<br>2. 支持模拟多智能体并行及接力；<br>3. 单元测试 100% 确定性通过。 | **Implemented** |
-| `FEAT-ENG-002` | 隔离 OMP SDK 适配器 | 封装 `@oh-my-pi/pi-coding-agent`，接入原生 `task` 工具与 `subagentEventBus`。 | 具备行业领先的编程智能体能力，同时确保上游类型不泄露。 | P0 | M0/M1 | `FEAT-CORE-001` | 1. 成功导入并初始化会话；<br>2. 捕获子智能体生命周期并归一化事件；<br>3. 配置模型角色映射。 | **Implemented** |
+| `FEAT-ENG-002` | 隔离 OMP SDK 适配器 | 封装 `@oh-my-pi/pi-coding-agent`，接入原生子智能体、原生工具链与 `subagentEventBus`。 | 具备行业领先的编程智能体能力，同时确保上游类型不泄露。 | P0 | M0/M1 | `FEAT-CORE-001` | 1. 成功导入并初始化会话；<br>2. 捕获子智能体生命周期并归一化事件；<br>3. 配置模型角色映射。 | **Implemented** |
 | `FEAT-ENG-003` | 内存会话管理隔离 | 强制使用 `SessionManager.inMemory()` 实例化会话层。 | 防止读取或污染宿主机上其他工具的历史 JSONL 会话记录。 | P0 | M0 | `FEAT-ENG-002` | 1. 退出后本地无历史记录泄露；<br>2. 杜绝宿主历史状态交叉污染。 | **Implemented** |
-| `FEAT-ENG-004` | 工具严格白名单注入 | 初始化时开启 `restrictToolNames: true`，受控注入 `["read", "find", "grep", "task"]`。 | 防止模型意外执行任意破坏性指令，严格根据权限开放写入。 | P0 | M0/M1 | `FEAT-ENG-002` | 1. 严格限定受控工具集；<br>2. 未授权写工具调用直接拦截。 | **Implemented** |
+| `FEAT-ENG-004` | 原生编码与检索工具集成 | 依托 OMP 原生工具体系提供 `write`, `edit`, `bash`, `read`, `find`, `grep`, `task` 等，由 OMP 原生审批机制管控破坏性操作。 | 原生提供完整编码修改与检索能力，保障操作可控可审计。 | P0 | M0/M1.2 | `FEAT-ENG-002` | 1. 原生工具链按需提供；<br>2. 破坏性操作走原生审批流程。 | **OMP Native** |
 | `FEAT-ENG-005` | 引擎就绪与健康探测 | `checkHealth()` 探针返回引擎就绪状态、原生 task 工具状态与诊断信息。 | 为 `doctor` 诊断工具与启动向导提供事实依据，绝不伪造成功结果。 | P0 | M0/M1 | `FEAT-CORE-001` | 1. 离线/无模型时准确报告状态；<br>2. 提供明确故障修复指引。 | **Implemented** |
 | `FEAT-ENG-006` | 会话安全销毁机制 | `cancel()` 立即终止当前流式生成；`dispose()` 清理底层资源与句柄。 | 保证用户敲击 `Ctrl+C` 时能够立即打断模型输出并释放内存。 | P0 | M0 | `FEAT-CORE-001` | 1. 调用后中止未完成流与子智能体；<br>2. 二次调用安全幂等，抛出标准异常。 | **Implemented** |
 
@@ -55,8 +57,10 @@
 | `FEAT-ROUT-001` | 任务意图与复杂度分类器 | 支持 8 类任务类型 (`explore`, `explain`, `plan`, `implement`, `debug`, `review`, `test`, `summarize`)。 | 智能识别任务特征，为后续精准路由派发提供结构化输入。 | P0 | M1 | `FEAT-CORE-001` | 1. 准确识别中英文任务 Prompt；<br>2. 结构化输出能力需求与复杂度。 | **Implemented** |
 | `FEAT-ROUT-002` | 四大智能路由工作模式 | 实现 `LOCAL`、`BALANCED`、`PERFORMANCE`、`MANUAL` 策略矩阵。 | 满足不同安全合规与算力预算场景的需求。 | P0 | M1 | `FEAT-ROUT-001` | 1. LOCAL 模式绝对禁止云端；<br>2. BALANCED 模式复杂任务在授权时协同云端。 | **Implemented** |
 | `FEAT-ROUT-003` | 隐私敏感回退策略链 | Fallback 严格遵守当前路由模式与隐私约束，本地故障决不静默发往云端。 | 彻底杜绝数据在未经明确授权情况下的越权泄露。 | P0 | M1 | `FEAT-ROUT-002` | 1. LOCAL 回退链仅含本地模型；<br>2. 耗尽时抛出明确异常。 | **Implemented** |
-| `FEAT-ROUT-004` | 请求前调度层隐私守卫 | 通过 OMP `assertDispatchModel` 钩子在发送网络包前拦截非合规请求。 | 即使 Prompt 注入或上游意外切换，也无法突破调度层安全防线。 | P0 | M1 | `FEAT-ENG-002` | 1. 违规外发时抛出 `RoutingPolicyViolationError`；<br>2. 调度层阻断网络连接。 | **SDK VERIFIED** |
+| `FEAT-ROUT-004` | 路由层隐私合规分派 | 通过 `WorkloadModelRouter` 在路由决策阶段严格执行隐私约束（LOCAL 模式仅分派本地模型，禁止云端 Fallback）。*(注：原自定义 TS 网络拦截钩子已在 M1.2 架构重构中移除，由路由层策略决策接管)* | 避免恶意越权外发，从源头确保数据不出机。 | P0 | M1/M1.2 | `FEAT-ENG-002` | 1. LOCAL 模式仅分派物理本地模型；<br>2. 未授权云端时抛出异常。 | **Implemented** |
 | `FEAT-AGT-005` | 本地/云端跨模型协同工作流 | 实现本地 Explorer 扫码代码库 + 云端 Planner 制定架构方案的接力协同。 | 结合本地隐私零成本与云端高智商推理的最优解。 | P0 | M1 | `FEAT-ROUT-002` | 1. 本地生成摘要，最小必要上下文传云端；<br>2. 最终成果统一汇聚。 | **SDK VERIFIED (LIVE BLOCKED: 需要真实活跃双端点凭据)** |
+| `FEAT-AGT-006` | 原生 Reviewer 审查智能体 | 通过 OMP SDK 原生内置 `reviewer` 智能体执行代码质量与安全审计。*(注：M1.2 解除人工禁用，直接复用原生能力)* | 审查由独立模型承接，避免自我审查偏见，原生无缝委派。 | P0 | M1.2 | `FEAT-ENG-002` | 1. 原生支持 `reviewer` 智能体派发；<br>2. 经 OMP SDK 原生调度执行。 | **OMP Native** |
+| `FEAT-AGT-007` | 原生 Task 委派智能体 | 通过 OMP SDK 原生内置 `task` 智能体实现任务递归分解与子任务派发。*(注：M1.2 解除人工禁用，直接复用原生能力)* | 原生支持复杂多阶段任务分解与并发执行。 | P0 | M1.2 | `FEAT-ENG-002` | 1. 原生支持 `task` 委派；<br>2. 经 OMP SDK 原生调度执行。 | **OMP Native** |
 
 ---
 
@@ -79,7 +83,8 @@
 | :--- | :--- | :--- | :--- | :---: | :---: | :--- | :--- | :---: |
 | `FEAT-CFG-001` | 多 Provider 与路由配置结构 | 扩展 `NightglideConfig`，原生包含 `providers` 映射表与 `routing` 策略配置。 | 规范化持久化存储用户的所有模型偏好、角色绑定与云端开关。 | P0 | M1 | 无 | 1. 自动兼容旧版配置；<br>2. 结构自愈与校验。 | **Implemented** |
 | `FEAT-CFG-005` | 凭据安全提取与无明文 | 从环境变量（如 `OPENAI_API_KEY`）安全解析 Key，绝不在诊断或输出打印明文。 | 彻底杜绝用户误将包含密钥的配置文件提交到公共 Git 仓库。 | P0 | M0/M1 | `FEAT-CFG-001` | 1. 配置文件 Schema 默认不含明文 Key；<br>2. 日志脱敏保护。 | **Implemented** |
-| `FEAT-SEC-001` | 底层防篡改权限看门狗 | 在 SDK 调用与系统执行层之间构建代码级确定性逻辑拦截层。 | 无论大模型如何被 Prompt 注入，均无法绕过确定性权限门禁。 | P0 | M0 | `FEAT-CORE-003` | 1. 逻辑不可被模型指令改写；<br>2. 权限未命中时抛出强类型异常。 | **SDK VERIFIED** |
+| `FEAT-SEC-001` | 原生工具审批集成与 TUI 呈现 | 依托原生 OMP SDK 工具执行沙箱与审批机制，在终端 TUI 提供清晰的可视化审批确认。*(注：M1.2 架构重构中移除了自定义 4 层 Below-the-Prompt 拦截器与强制 deny 注入，全面回归并复用 OMP 原生审批体系)* | 兼顾操作安全与上游引擎原生兼容性，不破坏原生能力。 | P0 | M0/M1.2 | `FEAT-CORE-003` | 1. 呈现原生审批人机交互；<br>2. 用户确认后放行。 | **OMP Native & TUI** |
+| `FEAT-SEC-002` | 自定义拦截器移除与原生回归 | 移除自定义 4 层 Below-the-Prompt 工具拦截、`tools.approval: deny` 强制注入、`task.disabledAgents` 人工禁用与 `tool_execution_start` 硬中止。 | 消除对上游 API 的破坏性修改与脆弱补丁，回归薄适配器架构。 | P0 | M1.2 | `FEAT-ENG-002` | 1. 移除自定义硬拦截代码；<br>2. 恢复原生 OMP 完整代理能力。 | **REMOVED (M1.2)** |
 | `FEAT-SEC-004` | 敏感密钥脱敏展示 | 在日志输出、UI 调试面板与错误提示中，自动屏蔽敏感密钥。 | 防范截屏分享、录屏演示或日志上传时发生密钥无意泄露。 | P0 | M1 | `FEAT-MOD-004` | 1. 诊断接口仅返回 `hasAuth: true`；<br>2. 绝不在任何 public 字段打印 raw key。 | **Implemented** |
 
 ---

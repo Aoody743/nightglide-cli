@@ -1,12 +1,44 @@
 import React from "react";
 import type { Theme } from "@nightglide/themes";
-import type { SubagentMonitorItem } from "@nightglide/core";
+import type { SubagentMonitorItem, AgentRole } from "@nightglide/core";
+
+export interface SubagentBadge {
+  label: string;
+  icon: string;
+  category: "planner" | "reviewer" | "scout" | "task" | "main" | "other";
+}
+
+/**
+ * Maps agent roles to distinctive visual badges, cleanly identifying native OMP subagents.
+ */
+export function getSubagentBadge(role: AgentRole | string): SubagentBadge {
+  const normalized = (role || "").toLowerCase();
+  switch (normalized) {
+    case "plan":
+    case "planner":
+      return { label: "PLANNER", icon: "📋", category: "planner" };
+    case "review":
+    case "reviewer":
+      return { label: "REVIEWER", icon: "🛡", category: "reviewer" };
+    case "scout":
+    case "explore":
+      return { label: "SCOUT", icon: "🔭", category: "scout" };
+    case "task":
+    case "implement":
+      return { label: "TASK", icon: "⚙", category: "task" };
+    case "main":
+      return { label: "MAIN", icon: "✦", category: "main" };
+    default:
+      return { label: (role || "AGENT").toUpperCase(), icon: "◈", category: "other" };
+  }
+}
 
 export interface AgentMonitorProps {
   theme: Theme;
   subagents: SubagentMonitorItem[];
   isOpen?: boolean;
   maxVisible?: number;
+  interactionMode?: "guided" | "expert";
 }
 
 export function AgentMonitor({
@@ -43,6 +75,18 @@ export function AgentMonitor({
 
       <box flexDirection="column" gap={0} marginY={1}>
         {visibleSubagents.map((agent) => {
+          const badge = getSubagentBadge(agent.role);
+          const roleColor =
+            badge.category === "planner"
+              ? theme.colors.accentSecondary
+              : badge.category === "reviewer"
+              ? theme.colors.info
+              : badge.category === "scout"
+              ? theme.colors.accent
+              : badge.category === "task"
+              ? theme.colors.warning
+              : theme.colors.accent;
+
           const locColor =
             agent.locality === "local" ? theme.colors.success : theme.colors.accentSecondary;
           const statusColor =
@@ -64,7 +108,7 @@ export function AgentMonitor({
               paddingX={1}
             >
               <box flexDirection="row" alignItems="center" gap={1}>
-                <text fg={theme.colors.accent}>[{agent.role.toUpperCase()}]</text>
+                <text fg={roleColor}>{badge.icon} [{badge.label}]</text>
                 <text fg={theme.colors.textPrimary}>{agent.model}</text>
                 <text fg={locColor}>({agent.locality === "local" ? "LOCAL" : "CLOUD"})</text>
                 <text fg={theme.colors.border}>│</text>

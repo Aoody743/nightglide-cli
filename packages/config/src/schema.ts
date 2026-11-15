@@ -28,9 +28,9 @@ export interface RoutingConfig {
 }
 
 export interface SecurityPermissionConfig {
-  readOnly: boolean;
-  requireToolConfirmation: boolean;
-  allowShellExecution: boolean;
+  readOnly?: boolean;
+  requireToolConfirmation?: boolean;
+  allowShellExecution?: boolean;
 }
 
 export interface NightglideConfig {
@@ -41,5 +41,5 @@ export interface NightglideConfig {
   model: string;
   providers: Record<string, ProviderEndpointConfig>;
   routing: RoutingConfig;
-  permissions: SecurityPermissionConfig;
+  permissions?: SecurityPermissionConfig;
 }

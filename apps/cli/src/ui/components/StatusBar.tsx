@@ -9,6 +9,7 @@ export interface StatusBarProps {
   activeScreen?: string;
   status?: AgentStatus;
   dimensions?: TerminalDimensions;
+  interactionMode?: "guided" | "expert";
 }
 
 export function StatusBar({
@@ -17,6 +18,7 @@ export function StatusBar({
   activeScreen = "welcome",
   status = "idle",
   dimensions,
+  interactionMode = "guided",
 }: StatusBarProps) {
   const home = process.env.HOME || "";
   const displayPath = home && workspacePath.startsWith(home)
@@ -49,6 +51,9 @@ export function StatusBar({
           <text fg={theme.colors.accent}>[1-5]</text>
           <text fg={theme.colors.textSecondary}>Tabs</text>
           <text fg={theme.colors.border}>·</text>
+          <text fg={theme.colors.accentSecondary}>[Tab]</text>
+          <text fg={theme.colors.textSecondary}>Mode</text>
+          <text fg={theme.colors.border}>·</text>
           <text fg={theme.colors.error}>[Q]</text>
           <text fg={theme.colors.textMuted}>Exit</text>
         </box>
@@ -69,6 +74,9 @@ export function StatusBar({
           <text fg={theme.colors.accent}>[5]</text>
           <text fg={theme.colors.textSecondary}>Models</text>
           <text fg={theme.colors.border}>·</text>
+          <text fg={theme.colors.accentSecondary}>[Tab]</text>
+          <text fg={theme.colors.textSecondary}>Mode</text>
+          <text fg={theme.colors.border}>·</text>
           <text fg={theme.colors.error}>[Q]</text>
           <text fg={theme.colors.textMuted}>Exit</text>
         </box>
@@ -80,12 +88,29 @@ export function StatusBar({
         <text fg={theme.colors.textSecondary}>{formattedPath}</text>
       </box>
 
-      {/* Active Theme & Mode */}
-      {!isUltraCompact && (
+      {/* Active Mode & Theme */}
+      {!isUltraCompact ? (
         <box flexDirection="row" alignItems="center" gap={1}>
+          <text fg={theme.colors.textMuted}>Mode:</text>
+          <text
+            fg={
+              interactionMode === "expert"
+                ? theme.colors.accentSecondary
+                : theme.colors.accent
+            }
+          >
+            {interactionMode === "expert" ? "Expert" : "Guided"}
+          </text>
+          <text fg={theme.colors.border}>│</text>
           <text fg={theme.colors.textMuted}>Theme:</text>
           <text fg={theme.colors.accent}>{theme.name}</text>
           <text fg={theme.colors.textMuted}>({theme.type})</text>
+        </box>
+      ) : (
+        <box flexDirection="row" alignItems="center" gap={1}>
+          <text fg={theme.colors.accent}>
+            {interactionMode === "expert" ? "[Exp]" : "[Gld]"}
+          </text>
         </box>
       )}
     </box>

@@ -8,6 +8,12 @@ import type {
   AgentEvent,
   AgentStatus,
 } from "@nightglide/core";
+import { getSubagentBadge } from "../../apps/cli/src/ui/components/AgentMonitor.js";
+import {
+  getToolIcon,
+  formatToolSummary,
+  formatToolResultSummary,
+} from "../../apps/cli/src/ui/screens/ChatScreen.js";
 
 // Define the core UI state accumulation logic to test deterministically
 export interface ToolCallItem {
@@ -626,5 +632,246 @@ describe("Message Accumulation from AgentEvent Streams", () => {
       totalTokens: 100,
     });
     expect(state.subagents[0].status).toBe("completed");
+  });
+});
+
+describe("Native OMP Subagents Visualization", () => {
+  test("identifies Planner role (plan, planner) with distinct badge and category", () => {
+    const badgePlan = getSubagentBadge("plan");
+    expect(badgePlan.label).toBe("PLANNER");
+    expect(badgePlan.icon).toBe("📋");
+    expect(badgePlan.category).toBe("planner");
+
+    const badgePlanner = getSubagentBadge("planner");
+    expect(badgePlanner.label).toBe("PLANNER");
+    expect(badgePlanner.icon).toBe("📋");
+    expect(badgePlanner.category).toBe("planner");
+  });
+
+  test("identifies Reviewer role (review, reviewer) with distinct badge and category", () => {
+    const badgeReview = getSubagentBadge("review");
+    expect(badgeReview.label).toBe("REVIEWER");
+    expect(badgeReview.icon).toBe("🛡");
+    expect(badgeReview.category).toBe("reviewer");
+
+    const badgeReviewer = getSubagentBadge("reviewer");
+    expect(badgeReviewer.label).toBe("REVIEWER");
+    expect(badgeReviewer.icon).toBe("🛡");
+    expect(badgeReviewer.category).toBe("reviewer");
+  });
+
+  test("identifies Scout role (scout, explore) with distinct badge and category", () => {
+    const badgeScout = getSubagentBadge("scout");
+    expect(badgeScout.label).toBe("SCOUT");
+    expect(badgeScout.icon).toBe("🔭");
+    expect(badgeScout.category).toBe("scout");
+
+    const badgeExplore = getSubagentBadge("explore");
+    expect(badgeExplore.label).toBe("SCOUT");
+    expect(badgeExplore.icon).toBe("🔭");
+    expect(badgeExplore.category).toBe("scout");
+  });
+
+  test("identifies Task role (task, implement) with distinct badge and category", () => {
+    const badgeTask = getSubagentBadge("task");
+    expect(badgeTask.label).toBe("TASK");
+    expect(badgeTask.icon).toBe("⚙");
+    expect(badgeTask.category).toBe("task");
+
+    const badgeImplement = getSubagentBadge("implement");
+    expect(badgeImplement.label).toBe("TASK");
+    expect(badgeImplement.icon).toBe("⚙");
+    expect(badgeImplement.category).toBe("task");
+  });
+
+  test("identifies Main coordinator role with distinct badge", () => {
+    const badgeMain = getSubagentBadge("main");
+    expect(badgeMain.label).toBe("MAIN");
+    expect(badgeMain.icon).toBe("✦");
+    expect(badgeMain.category).toBe("main");
+  });
+
+  test("falls back gracefully for custom or unknown roles", () => {
+    const customBadge = getSubagentBadge("custom_worker");
+    expect(customBadge.label).toBe("CUSTOM_WORKER");
+    expect(customBadge.icon).toBe("◈");
+    expect(customBadge.category).toBe("other");
+  });
+});
+
+describe("Native OMP Tools Formatting & Icons", () => {
+  test("assigns distinct icons to native OMP tools", () => {
+    expect(getToolIcon("read")).toBe("📖");
+    expect(getToolIcon("read_file")).toBe("📖");
+    expect(getToolIcon("write")).toBe("✍️");
+    expect(getToolIcon("write_file")).toBe("✍️");
+    expect(getToolIcon("edit")).toBe("✂️");
+    expect(getToolIcon("bash")).toBe("💻");
+    expect(getToolIcon("task")).toBe("⚙️");
+    expect(getToolIcon("glob")).toBe("🔍");
+    expect(getToolIcon("grep")).toBe("🔎");
+    expect(getToolIcon("todo")).toBe("📝");
+    expect(getToolIcon("unknown_tool")).toBe("🛠");
+  });
+
+  test("formats read, write, and edit tool summaries with file path", () => {
+    expect(formatToolSummary("read", { path: "src/index.ts" })).toBe("src/index.ts");
+    expect(formatToolSummary("write", { path: "dist/bundle.js" })).toBe("dist/bundle.js");
+    expect(formatToolSummary("edit", { path: "packages/core/src/contracts.ts" })).toBe(
+      "packages/core/src/contracts.ts"
+    );
+  });
+
+  test("formats bash command input with shell command indicator", () => {
+    expect(formatToolSummary("bash", { command: "bun test tests/ui/" })).toBe(
+      "$ bun test tests/ui/"
+    );
+  });
+
+  test("formats task subagent delegation description", () => {
+    expect(
+      formatToolSummary("task", {
+        prompt: "Refactor router module",
+        subagent: "planner",
+      })
+    ).toBe("[planner] Refactor router module");
+  });
+
+  test("formats glob and grep search patterns", () => {
+    expect(formatToolSummary("glob", { pattern: "**/*.test.ts" })).toBe("pattern: **/*.test.ts");
+    expect(formatToolSummary("grep", { query: "AgentRole", path: "packages/" })).toBe(
+      'search "AgentRole" in packages/'
+    );
+  });
+
+  test("formats todo tool action", () => {
+    expect(formatToolSummary("todo", { action: "mark_completed" })).toBe("action: mark_completed");
+  });
+
+  test("formats tool result summaries into clean representations", () => {
+    expect(formatToolResultSummary("read", { bytes: 2048, lines: 80 })).toBe("2048 bytes, 80 lines");
+    expect(formatToolResultSummary("bash", { stdout: "All 21 tests passed successfully\n" })).toBe(
+      "All 21 tests passed successfully"
+    );
+    expect(formatToolResultSummary("bash", "Build finished with 0 errors")).toBe(
+      "Build finished with 0 errors"
+    );
+  });
+});
+
+describe("Tool Execution Events without Artificial Filtering", () => {
+  test("accumulates all native OMP tools without rejection or drop", () => {
+    const nativeTools = ["read", "write", "edit", "bash", "task", "glob", "grep", "todo"];
+    const state = new ChatStateReducer();
+    state.addUserMessage("Execute native coding workflow");
+
+    for (let i = 0; i < nativeTools.length; i++) {
+      const toolName = nativeTools[i];
+      const callId = `call_${toolName}_${i}`;
+
+      state.applyEvent({
+        type: "tool_start",
+        toolName,
+        toolCallId: callId,
+        input: { tool: toolName, index: i },
+      });
+
+      expect(state.status).toBe("executing_tool");
+      expect(state.activeTool).toBe(toolName);
+
+      state.applyEvent({
+        type: "tool_end",
+        toolName,
+        toolCallId: callId,
+        result: { status: "success", executed: toolName },
+      });
+
+      expect(state.activeTool).toBeUndefined();
+    }
+
+    const asstMsg = state.messages.find((m) => m.role === "assistant");
+    expect(asstMsg).toBeDefined();
+    expect(asstMsg!.toolCalls?.length).toBe(nativeTools.length);
+
+    for (let i = 0; i < nativeTools.length; i++) {
+      expect(asstMsg!.toolCalls![i].toolName).toBe(nativeTools[i]);
+      expect(asstMsg!.toolCalls![i].status).toBe("completed");
+    }
+  });
+
+  test("ensures no permission or approval dialog is artificially required", () => {
+    // When executing mutating native OMP tools like write, bash, edit,
+    // the UI state reducer processes them directly as native tool calls
+    const state = new ChatStateReducer();
+    state.addUserMessage("Write code");
+
+    state.applyEvent({
+      type: "tool_start",
+      toolName: "write",
+      toolCallId: "write_01",
+      input: { path: "src/app.ts", content: "console.log('hello');" },
+    });
+
+    // Directly in progress without custom permission blocker
+    expect(state.status).toBe("executing_tool");
+    expect(state.activeTool).toBe("write");
+
+    state.applyEvent({
+      type: "tool_end",
+      toolName: "write",
+      toolCallId: "write_01",
+      result: { bytesWritten: 32 },
+    });
+
+    const asstMsg = state.messages.find((m) => m.role === "assistant");
+    expect(asstMsg!.toolCalls![0].status).toBe("completed");
+  });
+});
+
+describe("Interaction Mode (Guided vs Expert) State & Commands", () => {
+  function handleModeCommand(
+    prompt: string,
+    currentMode: "guided" | "expert"
+  ): { nextMode: "guided" | "expert"; isHandled: boolean } {
+    const lower = prompt.trim().toLowerCase();
+    if (lower === "/mode expert") {
+      return { nextMode: "expert", isHandled: true };
+    }
+    if (lower === "/mode guided") {
+      return { nextMode: "guided", isHandled: true };
+    }
+    if (lower === "/mode") {
+      return {
+        nextMode: currentMode === "guided" ? "expert" : "guided",
+        isHandled: true,
+      };
+    }
+    return { nextMode: currentMode, isHandled: false };
+  }
+
+  test("/mode expert switches target mode to expert", () => {
+    const res = handleModeCommand("/mode expert", "guided");
+    expect(res.isHandled).toBe(true);
+    expect(res.nextMode).toBe("expert");
+  });
+
+  test("/mode guided switches target mode to guided", () => {
+    const res = handleModeCommand("/mode guided", "expert");
+    expect(res.isHandled).toBe(true);
+    expect(res.nextMode).toBe("guided");
+  });
+
+  test("/mode toggles between guided and expert", () => {
+    const toggleFromGuided = handleModeCommand("/mode", "guided");
+    expect(toggleFromGuided.nextMode).toBe("expert");
+
+    const toggleFromExpert = handleModeCommand("/mode", "expert");
+    expect(toggleFromExpert.nextMode).toBe("guided");
+  });
+
+  test("regular user prompt is not treated as a mode command", () => {
+    const res = handleModeCommand("Write an expert sorting algorithm", "guided");
+    expect(res.isHandled).toBe(false);
+    expect(res.nextMode).toBe("guided");
   });
 });

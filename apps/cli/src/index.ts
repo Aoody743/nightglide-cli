@@ -55,7 +55,9 @@ async function main(): Promise<void> {
       break;
 
     case "demo":
-      await runDemoCommand();
+      await runDemoCommand({
+        nonInteractive: args.includes("--non-interactive") || args.includes("-n"),
+      });
       break;
 
     case "chat":

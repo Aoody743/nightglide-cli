@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, Component, type ReactNode } from "react";
 import { getThemeManager, type Theme } from "@nightglide/themes";
 import type { AgentEngine } from "@nightglide/core";
+import { loadConfig, saveConfig, type InteractionMode } from "@nightglide/config";
 import { useKeyboard } from "@opentui/react";
 import { Header, type ScreenId } from "./components/Header.js";
 import { StatusBar } from "./components/StatusBar.js";
@@ -17,6 +18,7 @@ export interface AppProps {
   onExit?: () => void;
   workspacePath?: string;
   dimensions?: { width: number; height: number };
+  initialInteractionMode?: InteractionMode;
 }
 
 /**
@@ -74,13 +76,30 @@ export function App({
   onExit,
   workspacePath = process.cwd(),
   dimensions: overrideDimensions,
+  initialInteractionMode,
 }: AppProps) {
   const themeManager = getThemeManager();
   const [theme, setTheme] = useState<Theme>(() => themeManager.getActiveTheme());
   const [activeScreen, setActiveScreen] = useState<ScreenId>(initialScreen);
+  const [interactionMode, setInteractionMode] = useState<InteractionMode>(
+    initialInteractionMode ?? "guided"
+  );
 
   // Responsive dimensions with fallback for 80x24, 100x30, 120x36
   const dimensions: TerminalDimensions = useResponsiveTerminalDimensions(overrideDimensions);
+
+  // Load configured interaction mode on mount if not explicitly supplied
+  useEffect(() => {
+    if (!initialInteractionMode) {
+      loadConfig()
+        .then((cfg) => {
+          if (cfg.interactionMode) {
+            setInteractionMode(cfg.interactionMode);
+          }
+        })
+        .catch(() => {});
+    }
+  }, [initialInteractionMode]);
 
   // Subscribe to global theme changes
   useEffect(() => {
@@ -105,11 +124,38 @@ export function App({
     }
   }, [onExit]);
 
+  const handleToggleInteractionMode = useCallback(() => {
+    setInteractionMode((prev) => {
+      const nextMode: InteractionMode = prev === "guided" ? "expert" : "guided";
+      loadConfig()
+        .then((cfg) => {
+          saveConfig({ ...cfg, interactionMode: nextMode }).catch(() => {});
+        })
+        .catch(() => {});
+      return nextMode;
+    });
+  }, []);
+
+  const handleSetInteractionMode = useCallback((mode: InteractionMode) => {
+    setInteractionMode(mode);
+    loadConfig()
+      .then((cfg) => {
+        saveConfig({ ...cfg, interactionMode: mode }).catch(() => {});
+      })
+      .catch(() => {});
+  }, []);
+
   // Global keyboard shortcuts with strict focus isolation
   useKeyboard((key) => {
     // Universal safe exit with Ctrl+C or Ctrl+Q
     if (key.ctrl && (key.name === "c" || key.name === "q")) {
       handleExit();
+      return;
+    }
+
+    // Universal Tab to toggle interaction mode (Guided <-> Expert)
+    if (key.name === "tab") {
+      handleToggleInteractionMode();
       return;
     }
 
@@ -228,6 +274,9 @@ export function App({
               engine={engine}
               onNavigate={setActiveScreen}
               dimensions={dimensions}
+              interactionMode={interactionMode}
+              onToggleInteractionMode={handleToggleInteractionMode}
+              onSetInteractionMode={handleSetInteractionMode}
             />
           )}
 
@@ -261,6 +310,7 @@ export function App({
           workspacePath={workspacePath}
           activeScreen={activeScreen}
           dimensions={dimensions}
+          interactionMode={interactionMode}
         />
       </box>
     </TerminalErrorBoundary>

@@ -7,7 +7,6 @@ import {
   type TaskCategory,
   ModelNotConfiguredError,
   ProviderUnavailableError,
-  RoutingPolicyViolationError,
   CloudAuthorizationRequiredError,
   ManualRoleNotAssignedError,
   ModelCapabilityMismatchError,

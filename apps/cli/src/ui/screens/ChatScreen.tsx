@@ -9,6 +9,7 @@ import type {
   SubagentMonitorItem,
   RoutingDecision,
 } from "@nightglide/core";
+import type { InteractionMode } from "@nightglide/config";
 import { AgentStatus } from "../components/AgentStatus.js";
 import { Composer } from "../components/Composer.js";
 import { AgentMonitor } from "../components/AgentMonitor.js";
@@ -39,9 +40,110 @@ export interface ChatScreenProps {
   engine?: AgentEngine;
   onNavigate?: (screen: ScreenId) => void;
   dimensions?: TerminalDimensions;
+  interactionMode?: InteractionMode;
+  onToggleInteractionMode?: () => void;
+  onSetInteractionMode?: (mode: InteractionMode) => void;
 }
 
-export function ChatScreen({ theme, engine, dimensions }: ChatScreenProps) {
+/**
+ * Maps native OMP and coding tool names to representative visual icons.
+ */
+export function getToolIcon(toolName: string): string {
+  const name = (toolName || "").toLowerCase();
+  switch (name) {
+    case "read":
+    case "read_file":
+      return "📖";
+    case "write":
+    case "write_file":
+      return "✍️";
+    case "edit":
+      return "✂️";
+    case "bash":
+      return "💻";
+    case "task":
+      return "⚙️";
+    case "glob":
+      return "🔍";
+    case "grep":
+      return "🔎";
+    case "todo":
+      return "📝";
+    default:
+      return "🛠";
+  }
+}
+
+/**
+ * Cleanly formats tool input parameters into human-readable summaries for native OMP tools.
+ */
+export function formatToolSummary(toolName: string, input: Record<string, unknown> = {}): string {
+  const name = (toolName || "").toLowerCase();
+  switch (name) {
+    case "read":
+    case "read_file":
+      return input.path ? String(input.path) : "read file";
+    case "write":
+    case "write_file":
+      return input.path ? String(input.path) : "write file";
+    case "edit":
+      return input.path ? String(input.path) : "edit file";
+    case "bash":
+      return input.command ? `$ ${String(input.command)}` : "shell command";
+    case "task": {
+      const taskDesc = input.prompt || input.description || input.task || "";
+      const targetRole = input.subagent || input.role || "subagent";
+      return taskDesc ? `[${targetRole}] ${String(taskDesc)}` : `delegated to ${targetRole}`;
+    }
+    case "glob":
+      return input.pattern ? `pattern: ${String(input.pattern)}` : "find files";
+    case "grep":
+      return input.query || input.pattern
+        ? `search "${String(input.query || input.pattern)}" in ${input.path || "."}`
+        : "search text";
+    case "todo":
+      return input.action ? `action: ${String(input.action)}` : "manage todos";
+    default:
+      return Object.keys(input).length > 0 ? JSON.stringify(input) : "execute";
+  }
+}
+
+/**
+ * Extracts a concise single-line representation from tool execution results.
+ */
+export function formatToolResultSummary(toolName: string, result: unknown): string {
+  if (result === undefined || result === null) return "";
+  if (typeof result === "string") {
+    const singleLine = result.trim().replace(/\s+/g, " ");
+    return singleLine.length > 50 ? singleLine.slice(0, 47) + "..." : singleLine;
+  }
+  if (typeof result === "object") {
+    const obj = result as Record<string, unknown>;
+    if (obj.output && typeof obj.output === "string") {
+      const out = obj.output.trim().replace(/\s+/g, " ");
+      return out.length > 50 ? out.slice(0, 47) + "..." : out;
+    }
+    if (obj.stdout && typeof obj.stdout === "string") {
+      const out = obj.stdout.trim().replace(/\s+/g, " ");
+      return out.length > 50 ? out.slice(0, 47) + "..." : out;
+    }
+    if (obj.bytes !== undefined) {
+      return `${obj.bytes} bytes` + (obj.lines ? `, ${obj.lines} lines` : "");
+    }
+    const str = JSON.stringify(result);
+    return str.length > 50 ? str.slice(0, 47) + "..." : str;
+  }
+  return String(result);
+}
+
+export function ChatScreen({
+  theme,
+  engine,
+  dimensions,
+  interactionMode = "guided",
+  onToggleInteractionMode,
+  onSetInteractionMode,
+}: ChatScreenProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       id: "system-init",
@@ -250,6 +352,50 @@ export function ChatScreen({ theme, engine, dimensions }: ChatScreenProps) {
   // Handle user prompt submit
   const handleSendMessage = useCallback(
     async (prompt: string) => {
+      // Check for command-based interaction mode switching: /mode expert, /mode guided, /mode
+      const lowerPrompt = prompt.trim().toLowerCase();
+      if (
+        lowerPrompt === "/mode expert" ||
+        lowerPrompt === "/mode guided" ||
+        lowerPrompt === "/mode"
+      ) {
+        let targetMode: InteractionMode = "guided";
+        if (lowerPrompt === "/mode expert") {
+          targetMode = "expert";
+        } else if (lowerPrompt === "/mode guided") {
+          targetMode = "guided";
+        } else {
+          targetMode = interactionMode === "guided" ? "expert" : "guided";
+        }
+
+        if (onSetInteractionMode) {
+          onSetInteractionMode(targetMode);
+        } else if (onToggleInteractionMode) {
+          onToggleInteractionMode();
+        }
+
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: "usr-" + Date.now(),
+            role: "user",
+            content: prompt,
+            timestamp: Date.now(),
+          },
+          {
+            id: "sys-" + Date.now(),
+            role: "system",
+            content: `✦ Interaction mode switched to ${
+              targetMode === "expert"
+                ? "Expert (compact tool execution summary)"
+                : "Guided (detailed parameter breakdown)"
+            }.`,
+            timestamp: Date.now(),
+          },
+        ]);
+        return;
+      }
+
       const userMsg: ChatMessage = {
         id: "usr-" + Date.now(),
         role: "user",
@@ -269,7 +415,7 @@ export function ChatScreen({ theme, engine, dimensions }: ChatScreenProps) {
           setStatusMessage(err?.message || "Failed to deliver prompt to engine");
         }
       } else {
-        // Standalone simulated fallback
+        // Standalone simulated fallback with native OMP tool execution
         setTimeout(() => {
           handleAgentEvent({
             type: "status",
@@ -281,7 +427,7 @@ export function ChatScreen({ theme, engine, dimensions }: ChatScreenProps) {
         setTimeout(() => {
           handleAgentEvent({
             type: "tool_start",
-            toolName: "read_file",
+            toolName: "read",
             toolCallId: "call-" + Date.now(),
             input: { path: "packages/core/src/contracts.ts" },
           });
@@ -290,7 +436,7 @@ export function ChatScreen({ theme, engine, dimensions }: ChatScreenProps) {
         setTimeout(() => {
           handleAgentEvent({
             type: "tool_end",
-            toolName: "read_file",
+            toolName: "read",
             toolCallId: "call-" + Date.now(),
             result: { bytes: 1420, lines: 61 },
           });
@@ -302,7 +448,7 @@ export function ChatScreen({ theme, engine, dimensions }: ChatScreenProps) {
         }, 750);
       }
     },
-    [handleAgentEvent]
+    [handleAgentEvent, interactionMode, onSetInteractionMode, onToggleInteractionMode]
   );
 
   const handleCancel = useCallback(async () => {
@@ -369,6 +515,7 @@ export function ChatScreen({ theme, engine, dimensions }: ChatScreenProps) {
             subagents={subagents}
             isOpen={showMonitor}
             maxVisible={isCompact ? 2 : undefined}
+            interactionMode={interactionMode}
           />
         ) : null}
 
@@ -416,52 +563,96 @@ export function ChatScreen({ theme, engine, dimensions }: ChatScreenProps) {
                   </text>
                 </box>
 
-                {/* Render Tool Calls if any */}
-                {msg.toolCalls?.map((tool) => (
-                  <box
-                    key={tool.id}
-                    flexDirection="column"
-                    borderColor={
-                      tool.status === "error"
-                        ? theme.colors.error
-                        : theme.colors.info
-                    }
-                    borderStyle="single"
-                    backgroundColor={theme.colors.surfaceElevated}
-                    paddingX={1}
-                    marginY={0}
-                  >
-                    <box flexDirection="row" justifyContent="space-between">
-                      <text fg={theme.colors.info}>
-                        🛠 [Tool] {tool.toolName}
-                      </text>
-                      <text
-                        fg={
-                          tool.status === "completed"
-                            ? theme.colors.success
-                            : tool.status === "error"
-                            ? theme.colors.error
-                            : theme.colors.warning
-                        }
+                {/* Render Native OMP Tool Calls */}
+                {msg.toolCalls?.map((tool) => {
+                  const toolIcon = getToolIcon(tool.toolName);
+                  const statusColor =
+                    tool.status === "completed"
+                      ? theme.colors.success
+                      : tool.status === "error"
+                      ? theme.colors.error
+                      : theme.colors.warning;
+
+                  // Expert Mode: compact single-line execution summary
+                  if (interactionMode === "expert") {
+                    return (
+                      <box
+                        key={tool.id}
+                        flexDirection="row"
+                        justifyContent="space-between"
+                        alignItems="center"
+                        backgroundColor={theme.colors.surfaceElevated}
+                        borderColor={tool.status === "error" ? theme.colors.error : theme.colors.border}
+                        borderStyle="single"
+                        paddingX={1}
+                        marginY={0}
                       >
-                        {tool.status.toUpperCase()}
+                        <box flexDirection="row" alignItems="center" gap={1}>
+                          <text fg={theme.colors.info}>{toolIcon} [{tool.toolName}]</text>
+                          <text fg={theme.colors.textPrimary}>
+                            {formatToolSummary(tool.toolName, tool.input)}
+                          </text>
+                        </box>
+                        <box flexDirection="row" alignItems="center" gap={1}>
+                          {tool.error ? (
+                            <text fg={theme.colors.error}>✖ {tool.error}</text>
+                          ) : tool.result !== undefined && tool.result !== null ? (
+                            <text fg={theme.colors.textSecondary}>
+                              {formatToolResultSummary(tool.toolName, tool.result)}
+                            </text>
+                          ) : null}
+                          <text fg={statusColor}>● {tool.status.toUpperCase()}</text>
+                        </box>
+                      </box>
+                    );
+                  }
+
+                  // Guided Mode: detailed parameter breakdown and results card
+                  return (
+                    <box
+                      key={tool.id}
+                      flexDirection="column"
+                      borderColor={
+                        tool.status === "error"
+                          ? theme.colors.error
+                          : tool.status === "completed"
+                          ? theme.colors.success
+                          : theme.colors.info
+                      }
+                      borderStyle="single"
+                      backgroundColor={theme.colors.surfaceElevated}
+                      paddingX={1}
+                      marginY={0}
+                    >
+                      <box flexDirection="row" justifyContent="space-between">
+                        <box flexDirection="row" gap={1}>
+                          <text fg={theme.colors.info}>
+                            {toolIcon} [{tool.toolName}]
+                          </text>
+                          <text fg={theme.colors.textSecondary}>
+                            {formatToolSummary(tool.toolName, tool.input)}
+                          </text>
+                        </box>
+                        <text fg={statusColor}>
+                          {tool.status.toUpperCase()}
+                        </text>
+                      </box>
+                      <text fg={theme.colors.textMuted}>
+                        Input: {JSON.stringify(tool.input)}
                       </text>
+                      {tool.result !== undefined && tool.result !== null ? (
+                        <text fg={theme.colors.textSecondary}>
+                          Result: {typeof tool.result === "string" ? tool.result : JSON.stringify(tool.result)}
+                        </text>
+                      ) : null}
+                      {tool.error ? (
+                        <text fg={theme.colors.error}>
+                          Error: {tool.error}
+                        </text>
+                      ) : null}
                     </box>
-                    <text fg={theme.colors.textMuted}>
-                      Input: {JSON.stringify(tool.input)}
-                    </text>
-                    {tool.result ? (
-                      <text fg={theme.colors.textSecondary}>
-                        Result: {JSON.stringify(tool.result)}
-                      </text>
-                    ) : null}
-                    {tool.error ? (
-                      <text fg={theme.colors.error}>
-                        Error: {tool.error}
-                      </text>
-                    ) : null}
-                  </box>
-                ))}
+                  );
+                })}
 
                 {/* Assistant Text Content */}
                 {msg.content ? (

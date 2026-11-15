@@ -17,7 +17,7 @@ describe("Configuration Package", () => {
     expect(DEFAULT_CONFIG.theme).toBe("midnight-flight");
     expect(DEFAULT_CONFIG.interactionMode).toBe("guided");
     expect(DEFAULT_CONFIG.provider).toBe("local");
-    expect(DEFAULT_CONFIG.permissions.readOnly).toBe(true);
+    expect(DEFAULT_CONFIG.permissions?.readOnly).toBe(false);
     expect(DEFAULT_CONFIG.providers.local.baseUrl).toBe("http://127.0.0.1:8000/v1");
     expect(DEFAULT_CONFIG.routing.mode).toBe("LOCAL");
     expect(DEFAULT_CONFIG.routing.allowCloud).toBe(false);
@@ -122,6 +122,26 @@ describe("Configuration Package", () => {
     expect(res.data?.interactionMode).toBe("guided");
     expect(res.data?.provider).toBe("local");
     expect(res.data?.providers.local).toBeDefined();
+    expect(res.data?.permissions?.readOnly).toBe(false);
+  });
+
+  test("validateConfig defaults permissions to writable (readOnly: false) with or without permissions field", () => {
+    // Config without permissions field
+    const withoutPerms = validateConfig({ theme: "aurora" });
+    expect(withoutPerms.success).toBe(true);
+    expect(withoutPerms.data?.permissions?.readOnly).toBe(false);
+    expect(withoutPerms.data?.permissions?.allowShellExecution).toBe(true);
+
+    // Config with empty permissions object
+    const emptyPerms = validateConfig({ theme: "aurora", permissions: {} });
+    expect(emptyPerms.success).toBe(true);
+    expect(emptyPerms.data?.permissions?.readOnly).toBe(false);
+    expect(emptyPerms.data?.permissions?.allowShellExecution).toBe(true);
+
+    // Explicit readOnly: true is honored
+    const explicitReadOnly = validateConfig({ theme: "aurora", permissions: { readOnly: true } });
+    expect(explicitReadOnly.success).toBe(true);
+    expect(explicitReadOnly.data?.permissions?.readOnly).toBe(true);
   });
 
   test("loadConfig returns default config when file does not exist", async () => {

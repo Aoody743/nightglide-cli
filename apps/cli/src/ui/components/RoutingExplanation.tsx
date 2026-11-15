@@ -1,6 +1,7 @@
 import React from "react";
 import type { Theme } from "@nightglide/themes";
 import type { RoutingDecision } from "@nightglide/core";
+import { getSubagentBadge } from "./AgentMonitor.js";
 
 export interface RoutingExplanationProps {
   theme: Theme;
@@ -10,6 +11,7 @@ export interface RoutingExplanationProps {
 export function RoutingExplanation({ theme, decision }: RoutingExplanationProps) {
   const localityColor = decision.locality === "local" ? theme.colors.success : theme.colors.accentSecondary;
   const localityLabel = decision.locality === "local" ? "[LOCAL ON-DEVICE]" : "[CLOUD AUTHORIZED]";
+  const badge = getSubagentBadge(decision.agentRole);
 
   return (
     <box
@@ -26,7 +28,9 @@ export function RoutingExplanation({ theme, decision }: RoutingExplanationProps)
           <text fg={theme.colors.accent}>⚡ [Intelligent Routing]</text>
           <text fg={theme.colors.textSecondary}>Task: {decision.taskCategory.toUpperCase()}</text>
           <text fg={theme.colors.border}>→</text>
-          <text fg={theme.colors.accentSecondary}>Role: {decision.agentRole.toUpperCase()}</text>
+          <text fg={theme.colors.accentSecondary}>
+            Role: {badge.icon} {badge.label}
+          </text>
         </box>
         <box flexDirection="row" gap={1}>
           <text fg={localityColor}>{localityLabel}</text>

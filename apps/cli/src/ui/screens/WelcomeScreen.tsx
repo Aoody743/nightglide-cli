@@ -133,11 +133,11 @@ export function WelcomeScreen({
         >
           <text fg={theme.colors.accent}>[2] Flight Deck (Chat)</text>
           <text fg={theme.colors.textSecondary}>
-            Enter the interactive coding console. Stream assistant responses, invoke tools, and inspect workspace state.
+            Enter the interactive coding console. Stream assistant responses, invoke native tools, and collaborate with subagents.
           </text>
         </box>
 
-        {/* Setup & Models */}
+        {/* Setup */}
         <box
           flexDirection="column"
           flexGrow={1}
@@ -147,7 +147,7 @@ export function WelcomeScreen({
           paddingX={2}
           paddingY={1}
         >
-          <text fg={theme.colors.accentSecondary}>[3] Setup & Models</text>
+          <text fg={theme.colors.accentSecondary}>[3] Setup</text>
           <text fg={theme.colors.textSecondary}>
             Configure local Apple Silicon inference (oMLX/Ollama) or secure cloud providers (Claude, GPT, DeepSeek).
           </text>
@@ -168,6 +168,22 @@ export function WelcomeScreen({
             Switch atmospheric palettes: Midnight Flight, Aurora, Cloudlight, Daybreak.
           </text>
         </box>
+
+        {/* Models */}
+        <box
+          flexDirection="column"
+          flexGrow={1}
+          backgroundColor={theme.colors.surface}
+          borderColor={theme.colors.border}
+          borderStyle="single"
+          paddingX={2}
+          paddingY={1}
+        >
+          <text fg={theme.colors.accent}>[5] Model Matrix</text>
+          <text fg={theme.colors.textSecondary}>
+            Configure subagents (Planner, Reviewer, Scout, Task) and routing modes.
+          </text>
+        </box>
       </box>
 
       {/* Philosophy Footnote */}
@@ -181,7 +197,7 @@ export function WelcomeScreen({
           "Where local intelligence meets unbounded flight."
         </text>
         <text fg={theme.colors.textMuted}>
-          Press [1-4] to navigate, or [Q] to return to terminal
+          Press [1-5] to navigate, [Tab] for Mode, or [Q] to return to terminal
         </text>
       </box>
     </box>

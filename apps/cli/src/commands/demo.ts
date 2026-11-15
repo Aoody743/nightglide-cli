@@ -19,7 +19,6 @@ export async function runDemoCommand(options: { nonInteractive?: boolean } = {})
     console.log("Initializing deterministic MockAgentEngine with Local Explorer & Cloud Planner...\n");
     const session = await mockEngine.createSession({
       workspacePath: process.cwd(),
-      readOnly: true,
       routingMode: "BALANCED",
       allowCloud: true,
       roleModelOverrides: {

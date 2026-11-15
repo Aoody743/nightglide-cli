@@ -1,6 +1,7 @@
 import React from "react";
 import type { AgentStatus as StatusType } from "@nightglide/core";
 import type { Theme } from "@nightglide/themes";
+import { getToolIcon } from "../screens/ChatScreen.js";
 
 export interface AgentStatusProps {
   status: StatusType;
@@ -37,12 +38,14 @@ export function AgentStatus({
       detailText = statusMessage || "Synthesizing code architecture and solution...";
       break;
 
-    case "executing_tool":
-      indicatorSymbol = "🛠";
+    case "executing_tool": {
+      const toolIcon = activeTool ? getToolIcon(activeTool) : "🛠";
+      indicatorSymbol = toolIcon;
       statusColor = theme.colors.info;
       statusText = "EXECUTING TOOL";
       detailText = activeTool ? `Invoking tool: ${activeTool}` : "Executing workspace operation...";
       break;
+    }
 
     case "streaming":
       indicatorSymbol = "▲";

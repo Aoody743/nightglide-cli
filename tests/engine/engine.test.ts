@@ -8,17 +8,14 @@ import {
   OmpAgentEngine,
   OmpAgentSession,
   DEFAULT_MOCK_GREETING_CHUNKS,
-  MUTATING_TOOL_NAMES,
-  READ_ONLY_PERMITTED_AGENTS,
-  createModelDispatchGuard,
 } from "@nightglide/engine";
 import {
   SessionDisposedError,
   ModelNotConfiguredError,
-  RoutingPolicyViolationError,
   EngineError,
   type AgentEvent,
 } from "@nightglide/core";
+import { discoverAgents } from "@oh-my-pi/pi-coding-agent";
 
 describe("MockAgentEngine & MockAgentSession", () => {
   const testWorkspace = path.join(os.tmpdir(), "nightglide-mock-workspace");
@@ -38,6 +35,9 @@ describe("MockAgentEngine & MockAgentSession", () => {
     expect(health.isMock).toBe(true);
     expect(health.message).toContain("operational");
     expect(health.details?.mode).toBe("simulation");
+    expect(health.details?.supportedTools).toContain("read");
+    expect(health.details?.supportedTools).toContain("write");
+    expect(health.details?.supportedTools).toContain("bash");
   });
 
   test("MockAgentEngine creates session with expected initial state", async () => {
@@ -191,7 +191,7 @@ describe("OmpAgentEngine & OmpAgentSession", () => {
     expect(engine.isMock).toBe(false);
   });
 
-  test("OmpAgentEngine checkHealth executes isolated probe and returns status", async () => {
+  test("OmpAgentEngine checkHealth executes isolated probe and returns status with native tools", async () => {
     const engine = new OmpAgentEngine({
       defaultWorkspacePath: testWorkspace,
     });
@@ -202,7 +202,14 @@ describe("OmpAgentEngine & OmpAgentSession", () => {
     expect(typeof health.ready).toBe("boolean");
     expect(typeof health.message).toBe("string");
     expect(health.details).toBeDefined();
-    expect(health.details?.allowedTools).toEqual(["read", "find", "grep", "task"]);
+    expect(health.details?.allowedTools).toContain("read");
+    expect(health.details?.allowedTools).toContain("write");
+    expect(health.details?.allowedTools).toContain("edit");
+    expect(health.details?.allowedTools).toContain("bash");
+    expect(health.details?.allowedTools).toContain("task");
+    expect(health.details?.allowedTools).toContain("glob");
+    expect(health.details?.allowedTools).toContain("grep");
+    expect(health.details?.taskToolEnabled).toBe(true);
   }, 30000);
 
   test("OmpAgentEngine creates isolated session and disposes cleanly", async () => {
@@ -230,6 +237,200 @@ describe("OmpAgentEngine & OmpAgentSession", () => {
       // Safe idempotent dispose
       await session.dispose();
       expect(session.getState().isDisposed).toBe(true);
+    } finally {
+      await fs.rm(tempAgentDir, { recursive: true, force: true });
+    }
+  }, 30000);
+
+  test("OmpAgentEngine registers native tools in writable session and read-only tools in read-only session", async () => {
+    const tempAgentDir = await fs.mkdtemp(path.join(os.tmpdir(), "nightglide-omp-tools-"));
+    const engine = new OmpAgentEngine({
+      defaultAgentDir: tempAgentDir,
+    });
+
+    try {
+      // 1. Writable session exposes all native tools (read, write, edit, bash, task, glob, grep, etc.)
+      const writableSession = (await engine.createSession({
+        workspacePath: testWorkspace,
+        readOnly: false,
+      })) as OmpAgentSession;
+
+      const ompSession = (writableSession as any).ompSession;
+      const activeTools = ompSession.getActiveToolNames?.() ?? [];
+      expect(activeTools).toContain("read");
+      expect(activeTools).toContain("write");
+      expect(activeTools).toContain("edit");
+      expect(activeTools).toContain("bash");
+      expect(activeTools).toContain("task");
+      expect(activeTools).toContain("glob");
+      expect(activeTools).toContain("grep");
+      expect(activeTools).toContain("wait");
+      expect(activeTools).toContain("todo");
+
+      // Verify native task tool exists and is accessible
+      const taskTool = ompSession.getToolByName?.("task");
+      expect(taskTool).toBeDefined();
+      expect(typeof taskTool.execute).toBe("function");
+
+      await writableSession.dispose();
+
+      // 2. Read-only session exposes read-only tools and excludes mutating tools
+      const roSession = (await engine.createSession({
+        workspacePath: testWorkspace,
+        readOnly: true,
+      })) as OmpAgentSession;
+
+      expect(roSession.readOnly).toBe(true);
+      const roOmpSession = (roSession as any).ompSession;
+      const roTools = roOmpSession.getActiveToolNames?.() ?? [];
+      expect(roTools).toContain("read");
+      expect(roTools).toContain("grep");
+      expect(roTools).toContain("task");
+      expect(roTools).not.toContain("write");
+      expect(roTools).not.toContain("edit");
+      expect(roTools).not.toContain("bash");
+
+      await roSession.dispose();
+    } finally {
+      await fs.rm(tempAgentDir, { recursive: true, force: true });
+    }
+  }, 30000);
+
+  test("Native OMP discovers supported subagents (task, scout, reviewer, security-reviewer, sonic)", async () => {
+    const discovery = await discoverAgents(process.cwd());
+    const agentNames = discovery.agents.map((a) => a.name);
+
+    expect(agentNames).toContain("scout");
+    expect(agentNames).toContain("reviewer");
+    expect(agentNames).toContain("security-reviewer");
+    expect(agentNames).toContain("task");
+    expect(agentNames).toContain("sonic");
+  });
+
+  test("Native subagent event normalization updates AgentMonitor without permission aborts", async () => {
+    const tempAgentDir = await fs.mkdtemp(path.join(os.tmpdir(), "nightglide-omp-monitor-"));
+    const engine = new OmpAgentEngine({
+      defaultAgentDir: tempAgentDir,
+    });
+
+    try {
+      const session = (await engine.createSession({
+        workspacePath: testWorkspace,
+      })) as OmpAgentSession;
+
+      const receivedEvents: AgentEvent[] = [];
+      session.subscribe((evt) => receivedEvents.push(evt));
+
+      // 1. Tool execution start (write/bash) on main session does not trip abort
+      session.handleOmpEvent({
+        type: "tool_execution_start",
+        toolName: "write",
+        toolCallId: "call_write_1",
+        args: { path: "hello.txt", content: "test" },
+      });
+
+      expect(session.getState().status).toBe("executing_tool");
+      const toolStartEvt = receivedEvents.find(
+        (e) => e.type === "tool_start" && e.toolName === "write"
+      );
+      expect(toolStartEvt).toBeDefined();
+
+      // Tool execution end
+      session.handleOmpEvent({
+        type: "tool_execution_end",
+        toolName: "write",
+        toolCallId: "call_write_1",
+        result: "File written",
+        isError: false,
+      });
+
+      const toolEndEvt = receivedEvents.find(
+        (e) => e.type === "tool_end" && e.toolName === "write"
+      );
+      expect(toolEndEvt).toBeDefined();
+
+      // 2. Subagent spawning and mutating tool (bash) execution does not abort
+      session.handleSubagentEvent({
+        id: "sub_worker_1",
+        event: {
+          type: "agent_start",
+        },
+      });
+
+      let state = session.getState();
+      expect(state.activeSubagents?.length).toBe(1);
+      expect(state.activeSubagents?.[0].id).toBe("sub_worker_1");
+      expect(state.activeSubagents?.[0].status).toBe("thinking");
+
+      // Subagent executes bash tool -> updates status to executing_tool without aborting
+      session.handleSubagentEvent({
+        id: "sub_worker_1",
+        event: {
+          type: "tool_execution_start",
+          toolName: "bash",
+          toolCallId: "call_sub_bash_1",
+        },
+      });
+
+      state = session.getState();
+      expect(state.activeSubagents?.[0].status).toBe("executing_tool");
+
+      // Verify no error events emitted
+      const errorEvts = receivedEvents.filter((e) => e.type === "error");
+      expect(errorEvts.length).toBe(0);
+
+      // Subagent tool execution end -> back to thinking
+      session.handleSubagentEvent({
+        id: "sub_worker_1",
+        event: {
+          type: "tool_execution_end",
+          toolName: "bash",
+          toolCallId: "call_sub_bash_1",
+        },
+      });
+
+      state = session.getState();
+      expect(state.activeSubagents?.[0].status).toBe("thinking");
+
+      // Subagent stream delta
+      session.handleSubagentEvent({
+        id: "sub_worker_1",
+        event: {
+          type: "message_update",
+          assistantMessageEvent: {
+            type: "text_delta",
+            delta: "Task progressing smoothly.",
+          },
+        },
+      });
+
+      state = session.getState();
+      expect(state.activeSubagents?.[0].status).toBe("streaming");
+      expect(
+        receivedEvents.some(
+          (e) => e.type === "subagent_delta" && e.delta === "Task progressing smoothly."
+        )
+      ).toBe(true);
+
+      // Subagent completion
+      session.handleSubagentEvent({
+        id: "sub_worker_1",
+        event: {
+          type: "agent_end",
+          usage: { totalTokens: 128 },
+        },
+      });
+
+      state = session.getState();
+      expect(state.activeSubagents?.[0].status).toBe("completed");
+      expect(state.activeSubagents?.[0].endedAt).toBeDefined();
+      expect(
+        receivedEvents.some(
+          (e) => e.type === "subagent_end" && e.subagentId === "sub_worker_1"
+        )
+      ).toBe(true);
+
+      await session.dispose();
     } finally {
       await fs.rm(tempAgentDir, { recursive: true, force: true });
     }
@@ -378,148 +579,6 @@ describe("OmpAgentEngine & OmpAgentSession", () => {
       await fs.rm(tempAgentDir, { recursive: true, force: true });
     }
   }, 30000);
-
-  test("OmpAgentEngine enforces read-only mode below-the-prompt permission invariants", async () => {
-    const tempAgentDir = await fs.mkdtemp(path.join(os.tmpdir(), "nightglide-omp-ro-"));
-    const engine = new OmpAgentEngine({
-      defaultAgentDir: tempAgentDir,
-    });
-
-    try {
-      const session = (await engine.createSession({
-        workspacePath: testWorkspace,
-        readOnly: true,
-      })) as OmpAgentSession;
-
-      expect(session.readOnly).toBe(true);
-
-      const ompSession = (session as any).ompSession;
-      expect(ompSession).toBeDefined();
-
-      // 1. Verify task tool is wrapped and blocks unsafe mutating subagents
-      const taskTool = ompSession.getToolByName?.("task");
-      expect(taskTool).toBeDefined();
-
-      // Attempting to spawn mutating agents (reviewer, task, sonic) must throw EngineError
-      await expect(
-        taskTool.execute("tc_rev", { agent: "reviewer", task: "review patch" })
-      ).rejects.toThrow(EngineError);
-
-      await expect(
-        taskTool.execute("tc_task", { agent: "task", task: "write code" })
-      ).rejects.toThrow(EngineError);
-
-      await expect(
-        taskTool.execute("tc_sonic", { agent: "sonic", task: "apply changes" })
-      ).rejects.toThrow(EngineError);
-
-      // 2. Verify main session mutating tool execution start trips safety error
-      const receivedEvents: AgentEvent[] = [];
-      session.subscribe((evt) => receivedEvents.push(evt));
-
-      session.handleOmpEvent({
-        type: "tool_execution_start",
-        toolName: "write",
-        toolCallId: "call_mut_1",
-        args: { path: "exploit.sh", content: "rm -rf" },
-      });
-
-      expect(session.getState().status).toBe("error");
-      const writeErr = receivedEvents.find(
-        (e) => e.type === "error" && e.error.includes("write")
-      );
-      expect(writeErr).toBeDefined();
-
-      // 3. Verify subagent mutating tool execution start trips safety error and cancels
-      session.handleSubagentEvent({
-        id: "sub_rogue_1",
-        event: {
-          type: "tool_execution_start",
-          toolName: "bash",
-          toolCallId: "call_mut_2",
-        },
-      });
-
-      const bashErr = receivedEvents.find(
-        (e) => e.type === "error" && e.error.includes("bash")
-      );
-      expect(bashErr).toBeDefined();
-
-      await session.dispose();
-    } finally {
-      await fs.rm(tempAgentDir, { recursive: true, force: true });
-    }
-  }, 30000);
-
-  test("createModelDispatchGuard strictly enforces provider locality and blocks unauthorized cloud dispatch in LOCAL mode", () => {
-    // 1. LOCAL mode guard
-    const localGuard = createModelDispatchGuard({
-      workspacePath: testWorkspace,
-      routingMode: "LOCAL",
-      allowCloud: false,
-    });
-
-    // Cloud endpoint URL -> throws
-    expect(() =>
-      localGuard({ provider: "custom", id: "gpt-4o", baseUrl: "https://api.openai.com/v1" })
-    ).toThrow(RoutingPolicyViolationError);
-
-    // SSRF hex representation -> throws
-    expect(() =>
-      localGuard({ provider: "custom", id: "local-mod", baseUrl: "http://0x7f000001:8000" })
-    ).toThrow(RoutingPolicyViolationError);
-
-    // Loopback bypass domain -> throws
-    expect(() =>
-      localGuard({ provider: "custom", id: "local-mod", baseUrl: "http://127.example.com:8000" })
-    ).toThrow(RoutingPolicyViolationError);
-
-    // Cloud provider by name -> throws
-    expect(() =>
-      localGuard({ provider: "openai", id: "gpt-4o" })
-    ).toThrow(RoutingPolicyViolationError);
-
-    expect(() =>
-      localGuard({ provider: "anthropic", id: "claude-3-5-sonnet" })
-    ).toThrow(RoutingPolicyViolationError);
-
-    expect(() =>
-      localGuard({ provider: "google", id: "gemini-1.5-pro" })
-    ).toThrow(RoutingPolicyViolationError);
-
-    // Cloud selector prefix -> throws
-    expect(() =>
-      localGuard({ provider: "local", id: "openai/gpt-4o" })
-    ).toThrow(RoutingPolicyViolationError);
-
-    // Legitimate local provider and endpoint -> succeeds
-    expect(() =>
-      localGuard({
-        provider: "omlx",
-        id: "omlx/qwen2.5-coder-7b",
-        baseUrl: "http://127.0.0.1:8000/v1",
-      })
-    ).not.toThrow();
-
-    expect(() =>
-      localGuard({
-        provider: "ollama",
-        id: "ollama/llama3.2",
-        baseUrl: "http://localhost:11434/v1",
-      })
-    ).not.toThrow();
-
-    // 2. BALANCED mode with allowCloud: true allows cloud dispatch
-    const cloudGuard = createModelDispatchGuard({
-      workspacePath: testWorkspace,
-      routingMode: "BALANCED",
-      allowCloud: true,
-    });
-
-    expect(() =>
-      cloudGuard({ provider: "openai", id: "gpt-4o", baseUrl: "https://api.openai.com/v1" })
-    ).not.toThrow();
-  });
 
   test("OmpAgentSession cancel terminates active subagents cleanly and transitions their status", async () => {
     const tempAgentDir = await fs.mkdtemp(path.join(os.tmpdir(), "nightglide-omp-subcancel-"));

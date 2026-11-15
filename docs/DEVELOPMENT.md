@@ -31,7 +31,7 @@ bun install
 - `@nightglide/config` (多提供商与路由配置存储)
 - `@nightglide/providers` (多提供商注册表与连通性探针)
 - `@nightglide/routing` (任务分类与工作负载模型路由器)
-- `@nightglide/engine` (OMP 原生任务适配器与确定性协作模拟器)
+- `@nightglide/engine` (原生 OMP SDK 轻量适配器与确定性协作模拟器)
 - `@nightglide/themes` (苍穹天象设计系统)
 - `apps/cli` (Nightglide 终端交互应用)
 
@@ -144,3 +144,12 @@ export OMLX_API_KEY="..."
 bun test tests/engine/collaboration.test.ts
 ```
 若未设置 `NIGHTGLIDE_REAL_PROVIDER_TEST=1`，测试套件将自动跳过真实网络调用，依靠内置的高保真测试双工器（Test Doubles）实现毫秒级确定性通过。
+
+---
+
+## 6. 原生 OMP 适配器架构与职责约定 (Architecture & Responsibility)
+
+Nightglide 贯彻“薄 SDK 适配器”原则，严格与底层 OMP 解耦且不破坏上游原生能力：
+- **OMP 原生拥有:** 工具执行与沙箱、工具可用性、原生工具审批机制、子智能体派发与生命周期管理、原生编码工具链 (`write`, `edit`, `bash`, 等)、原生 Reviewer 与 Plan 执行。
+- **Nightglide 拥有:** 终端 TUI、苍穹主题、多提供商注册表、任务分类、模型角色分配、4 大工作负载路由模式 (`LOCAL`, `BALANCED`, `PERFORMANCE`, `MANUAL`) 以及多智能体可视化监视。
+- **开发禁令:** 严禁在适配器层构建脆弱的自定义 4 层 Below-the-Prompt 拦截器、强制 `tools.approval: deny` 注入、或通过 `task.disabledAgents` 人为屏蔽上游合法 Agent。所有工具执行与审批必须由 OMP 原生机制驱动。
