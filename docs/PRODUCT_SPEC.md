@@ -183,9 +183,36 @@ flowchart TD
 - **描述:** 为开发者提供一键自检与故障排查报告。
 - **探测矩阵:**
   - 核心运行时（Bun 版本，Node.js 版本，Git 配置）。
-  - 上游核心包（OMP SDK 导出完整性，OpenTUI 渲染器可用性）。
-  - 本地与云端推理服务连通性（检测本地 8000、11434 端口状态）。
-  - 配置与权限校验（配置文件合法性、写权限）。
+  - 上游核心包（OMP SDK 导出完整性，OpenTUI 渲染器可用性，原生 Task 委派就绪状态）。
+  - 本地与云端推理服务连通性（检测本地 8000、11434 端口状态与鉴权要求）。
+  - 多提供商注册表与工作负载路由器状态检查。
+
+### FR-9: 多提供商管理与端点诊断 (`providers` & `models`)
+- **描述:** 支持多 Provider 并存配置与模型限定符引用。
+- **功能特性:**
+  - `nightglide providers`: 列出已配置的本地与云端端点，严格基于回环 IP 判定物理 Locality (`[LOCAL]` vs `[CLOUD]`)，探测连通性。
+  - `nightglide models`: 展示已注册模型的能力徽标、限定符 ID（如 `omlx/qwen2.5-coder`、`openai/gpt-4o`）与当前各智能体角色的分配关系。
+
+### FR-10: 工作负载感知模型智能路由 (`WorkloadModelRouter`)
+- **描述:** 依据任务意图、复杂度和严格的隐私合规要求，智能调度最适模型。
+- **4 类运行模式:**
+  - **`LOCAL`:** 绝对仅使用本地模型，底层硬件级拦截任何外网网络包，零代码泄露。
+  - **`BALANCED`:** 默认模式。简单检索/解释在本地运行；高复杂度规划在用户授权云端前提下流转至云端强模型。
+  - **`PERFORMANCE`:** 首选最高智商与推理能力的模型，严格在授权预算内运行。
+  - **`MANUAL`:** 用户针对 `MAIN`、`EXPLORE`、`PLAN`、`IMPLEMENT`、`REVIEW` 各角色显式指定的模型绝对生效。
+
+### FR-11: 本地与云端多智能体协同流水线 (Local + Cloud Agent Collaboration)
+- **描述:** 多 Agent 分工接力解决复杂开发任务。
+- **核心协同范式:**
+  - **Local Explore, Cloud Plan:** 本地 Explorer 扫描只读代码并提炼符号骨架；云端 Planner 仅接收必要摘要并产出架构蓝图。代码资产零全量上传。
+  - **Cloud Plan, Local Code, Cloud Review:** 云端编制蓝图后，本地编码模型修改文件，独立 Reviewer 模型执行安全质量审查。
+
+### FR-12: 实时多智能体监视器与模型矩阵视图 (`AgentMonitor` & `ModelAssignmentView`)
+- **描述:** 在终端 TUI 中消除 AI 协作的黑盒感。
+- **交互组件:**
+  - **Agent Monitor:** 对话界面可随时展开/收起参与当前任务的各 Agent 角色卡片、模型、LOCAL/CLOUD 标签、状态与 Token。
+  - **Routing Explanation:** 任务指派前展示直观的路由解释卡片与预估成本。
+  - **Model Matrix (`[5]` 快捷导航):** 交互式角色分配矩阵，无需手动编辑 YAML 即可直观查看与调整模型分配，一键切换路由模式与云端开关。
 
 ---
 

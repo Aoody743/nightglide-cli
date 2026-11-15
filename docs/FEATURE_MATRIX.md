@@ -2,9 +2,9 @@
 
 > **"Build beyond the horizon." / "漫翔苍穹，构筑所想。"**  
 > *状态标识说明:*  
-> - `Implemented`: 核心代码已编写且通过测试用例验证 (M0 阶段已完成)  
-> - `In Progress`: 正在开发中或正在进行适配联调 (M0 进行中 / M1 前期)  
-> - `Planned`: 已纳入里程碑规划，待后续版本开发 (M1 - M4)  
+> - `Implemented`: 核心代码已编写且通过全量自动化测试验证 (M0 / M1 阶段已完成)  
+> - `In Progress`: 正在开发中或正在进行下一阶段联调 (M1 验收 / M2 前期)  
+> - `Planned`: 已纳入里程碑规划，待后续版本开发 (M2 - M4)  
 > - `Research Required`: 依赖前沿架构探索或技术可行性预研 (预研阶段)
 
 ---
@@ -14,9 +14,9 @@
 | 特性编号 | 功能名称 | 功能描述 | 用户与架构价值 | 优先级 | 目标里程碑 | 依赖项 | 验收标准 (Acceptance Criteria) | 状态 |
 | :--- | :--- | :--- | :--- | :---: | :---: | :--- | :--- | :---: |
 | `FEAT-CORE-001` | 抽象引擎核心契约 | 定义 `AgentEngine` 与 `AgentSession` 接口，解耦 UI 表现与模型执行。 | 保证表现层不依赖任何具体运行时，支持无缝切换真实或模拟引擎。 | P0 | M0 | 无 | 1. 成功导出接口；<br>2. 任何合规引擎均可无侵入注入会话系统。 | **Implemented** |
-| `FEAT-CORE-002` | 判别联合事件流 | 采用 TypeScript Discriminated Union 规范 `AgentEvent`（6 类核心事件）。 | 消除类型不安全传递，UI 层可通过 `event.type` 实现强类型匹配。 | P0 | M0 | 无 | 1. 覆盖 `text_delta`、`tool_start`、`tool_end`、`status`、`error`、`done`；<br>2. 编译器能够对未知类型实施 exhaustiveness check。 | **Implemented** |
-| `FEAT-CORE-003` | 结构化异常继承树 | 基于 `NightglideError` 扩展 `EngineError`、`SecurityPermissionError` 等。 | 提供机器可读的 `code` 与可恢复标记 `recoverable`，支持 UI 精准降级。 | P0 | M0 | 无 | 1. 异常继承链清晰；<br>2. 支持判断模型未配置、权限拒绝与会话已释放。 | **Implemented** |
-| `FEAT-CORE-004` | 会话状态只读快照 | 导出 `SessionState` 提供当前状态、活跃模型与历史条数视图。 | 确保 UI 能够以无副作用的方式轮询或获取会话上下文元数据。 | P1 | M0 | `FEAT-CORE-001` | 1. 状态只读（`readonly`）；<br>2. 能准确反映会话是否已被销毁（`isDisposed`）。 | **Implemented** |
+| `FEAT-CORE-002` | 判别联合事件流 | 采用 TypeScript Discriminated Union 规范 `AgentEvent`（含路由与子智能体事件）。 | 消除类型不安全传递，UI 层可通过 `event.type` 实现强类型匹配。 | P0 | M0/M1 | 无 | 1. 覆盖 `text_delta`、`tool_start`、`tool_end`、`status`、`error`、`done`、`routing_decision`、`subagent_start`、`subagent_delta`、`subagent_end`；<br>2. 编译器能够对未知类型实施 exhaustiveness check。 | **Implemented** |
+| `FEAT-CORE-003` | 结构化异常继承树 | 基于 `NightglideError` 扩展 `EngineError`、`RoutingPolicyViolationError`、`CloudAuthorizationRequiredError`。 | 提供机器可读的 `code` 与可恢复标记 `recoverable`，支持 UI 精准降级。 | P0 | M0/M1 | 无 | 1. 异常继承链清晰；<br>2. 支持判断模型未配置、权限拒绝、云端未授权与会话已释放。 | **Implemented** |
+| `FEAT-CORE-004` | 会话状态只读快照 | 导出 `SessionState` 提供当前状态、活跃模型、历史条数与 `activeSubagents` 视图。 | 确保 UI 能够以无副作用的方式轮询或获取会话上下文元数据。 | P1 | M0/M1 | `FEAT-CORE-001` | 1. 状态只读（`readonly`）；<br>2. 能准确反映会话是否已被销毁与多智能体监视列表。 | **Implemented** |
 | `FEAT-CORE-005` | 响应式事件总线订阅 | `session.subscribe()` 支持传入事件处理器并返回无参销毁函数。 | 防止内存泄漏，支持组件挂载与卸载时的精准事件解绑。 | P0 | M0 | `FEAT-CORE-002` | 1. 订阅后可实时接收流式事件；<br>2. 调用返回函数后立即断开，无孤儿回调。 | **Implemented** |
 
 ---
@@ -25,12 +25,12 @@
 
 | 特性编号 | 功能名称 | 功能描述 | 用户与架构价值 | 优先级 | 目标里程碑 | 依赖项 | 验收标准 (Acceptance Criteria) | 状态 |
 | :--- | :--- | :--- | :--- | :---: | :---: | :--- | :--- | :---: |
-| `FEAT-ENG-001` | 确定性模拟引擎 | 内置 `MockAgentEngine`，模拟流式文本吐字与只读工具调用。 | 允许在无 API Key、无网络连接的离线环境下完整运行 UI 与测试。 | P0 | M0 | `FEAT-CORE-001` | 1. 严格按照步长流式分发事件；<br>2. 覆盖所有事件类型；<br>3. 单元测试 100% 确定性通过。 | **Implemented** |
-| `FEAT-ENG-002` | 隔离 OMP SDK 适配器 | 封装 `@oh-my-pi/pi-coding-agent`，将上游调用映射为 Nightglide 统一契约。 | 具备行业领先的编程智能体能力，同时确保上游类型不泄露。 | P0 | M0 | `FEAT-CORE-001` | 1. 成功导入并初始化会话；<br>2. 错误隔离不造成宿主崩溃。 | **In Progress** |
+| `FEAT-ENG-001` | 确定性模拟引擎 | 内置 `MockAgentEngine`，模拟单模型与多智能体（本地 Explore + 云端 Plan）协同。 | 允许在无 API Key、无网络连接的离线环境下完整运行 UI 与测试。 | P0 | M0/M1 | `FEAT-CORE-001` | 1. 严格按照步长流式分发事件；<br>2. 支持模拟多智能体并行及接力；<br>3. 单元测试 100% 确定性通过。 | **Implemented** |
+| `FEAT-ENG-002` | 隔离 OMP SDK 适配器 | 封装 `@oh-my-pi/pi-coding-agent`，接入原生 `task` 工具与 `subagentEventBus`。 | 具备行业领先的编程智能体能力，同时确保上游类型不泄露。 | P0 | M0/M1 | `FEAT-CORE-001` | 1. 成功导入并初始化会话；<br>2. 捕获子智能体生命周期并归一化事件；<br>3. 配置模型角色映射。 | **Implemented** |
 | `FEAT-ENG-003` | 内存会话管理隔离 | 强制使用 `SessionManager.inMemory()` 实例化会话层。 | 防止读取或污染宿主机上其他工具的历史 JSONL 会话记录。 | P0 | M0 | `FEAT-ENG-002` | 1. 退出后本地无历史记录泄露；<br>2. 杜绝宿主历史状态交叉污染。 | **Implemented** |
-| `FEAT-ENG-004` | 工具严格白名单注入 | 初始化时开启 `restrictToolNames: true`，限定只读工具集。 | 防止模型意外执行任意 Bash 脚本或覆盖用户重要工作区文件。 | P0 | M0 | `FEAT-ENG-002` | 1. 仅暴露受控工具（`read`, `find`, `grep`）；<br>2. 未授权工具调用直接拦截。 | **Implemented** |
-| `FEAT-ENG-005` | 引擎就绪与健康探测 | `checkHealth()` 探针返回引擎就绪状态、Mock 标识与诊断信息。 | 为 `doctor` 诊断工具与启动向导提供事实依据，绝不伪造成功结果。 | P0 | M0 | `FEAT-CORE-001` | 1. 离线/无模型时准确报告 `ready: false`；<br>2. 提供明确故障修复指引。 | **Implemented** |
-| `FEAT-ENG-006` | 会话安全销毁机制 | `cancel()` 立即终止当前流式生成；`dispose()` 清理底层资源与句柄。 | 保证用户敲击 `Ctrl+C` 时能够立即打断模型输出并释放内存。 | P0 | M0 | `FEAT-CORE-001` | 1. 调用后中止未完成流；<br>2. 二次调用安全幂等，抛出标准异常。 | **Implemented** |
+| `FEAT-ENG-004` | 工具严格白名单注入 | 初始化时开启 `restrictToolNames: true`，受控注入 `["read", "find", "grep", "task"]`。 | 防止模型意外执行任意破坏性指令，严格根据权限开放写入。 | P0 | M0/M1 | `FEAT-ENG-002` | 1. 严格限定受控工具集；<br>2. 未授权写工具调用直接拦截。 | **Implemented** |
+| `FEAT-ENG-005` | 引擎就绪与健康探测 | `checkHealth()` 探针返回引擎就绪状态、原生 task 工具状态与诊断信息。 | 为 `doctor` 诊断工具与启动向导提供事实依据，绝不伪造成功结果。 | P0 | M0/M1 | `FEAT-CORE-001` | 1. 离线/无模型时准确报告状态；<br>2. 提供明确故障修复指引。 | **Implemented** |
+| `FEAT-ENG-006` | 会话安全销毁机制 | `cancel()` 立即终止当前流式生成；`dispose()` 清理底层资源与句柄。 | 保证用户敲击 `Ctrl+C` 时能够立即打断模型输出并释放内存。 | P0 | M0 | `FEAT-CORE-001` | 1. 调用后中止未完成流与子智能体；<br>2. 二次调用安全幂等，抛出标准异常。 | **Implemented** |
 
 ---
 
@@ -38,25 +38,23 @@
 
 | 特性编号 | 功能名称 | 功能描述 | 用户与架构价值 | 优先级 | 目标里程碑 | 依赖项 | 验收标准 (Acceptance Criteria) | 状态 |
 | :--- | :--- | :--- | :--- | :---: | :---: | :--- | :--- | :---: |
-| `FEAT-MOD-001` | 本地 oMLX 端侧服务适配 | 适配 Apple Silicon 专用的 oMLX 本地推理服务器与端口检测。 | 为 Mac 开发者提供极致响应速度与 100% 隐私安全的本地模型编码体验。 | P0 | M0 | `FEAT-ENG-002` | 1. 识别 8000 端口服务；<br>2. 未配置鉴权时友好提示而非直接崩溃。 | **In Progress** |
-| `FEAT-MOD-002` | OpenAI 兼容 REST 适配 | 兼容通用 `/v1/chat/completions` 与 SSE 流式响应协议。 | 用户可自由对接各类自建模型网关、vLLM、LocalAI 等。 | P1 | M1 | `FEAT-ENG-002` | 1. 满足标准请求头与流解析；<br>2. 错误码与超时机制对齐。 | **In Progress** |
-| `FEAT-MOD-003` | 本地 Ollama 原生对接 | 自动探测 `http://127.0.0.1:11434`，拉取本地已下载模型列表。 | 降低初学者配置难度，实现无缝一键选配本地开源大模型（如 Qwen2.5-Coder）。 | P1 | M1 | `FEAT-MOD-002` | 1. 自动列出本地可用模型；<br>2. 智能向导中支持直接勾选。 | **Planned** |
-| `FEAT-MOD-004` | 云端主流服务商凭据托管 | 支持 Anthropic (Claude 3.5 Sonnet)、OpenAI (GPT-4o) 与 DeepSeek 等。 | 为需要超强推理能力的复杂项目提供高阶云端模型选择。 | P1 | M1 | `FEAT-CFG-005` | 1. 从环境变量安全解析 Key；<br>2. 网络异常重试与友好提示。 | **Planned** |
-| `FEAT-MOD-005` | 动态热切换模型 | 允许在交互会话中通过指令（如 `/model`）实时切换后端模型。 | 复杂任务使用高参数模型，简单语法修改使用轻量端侧模型以节省算力。 | P2 | M2 | `FEAT-CORE-004` | 1. 切换时不丢失会话上下文；<br>2. 状态栏模型标识即时更新。 | **Planned** |
-| `FEAT-MOD-006` | 上下文窗口与 Token 监控 | 实时统计输入输出 Token 数量，预警上下文超限并提供智能摘要截断。 | 防止超长上下文导致请求报错或费用超支。 | P2 | M2 | `FEAT-CORE-002` | 1. 精准度量 Token 消耗；<br>2. 状态栏渲染上下文百分比进度条。 | **Planned** |
+| `FEAT-MOD-001` | 本地 oMLX 端侧服务适配 | 适配 Apple Silicon 专用的 oMLX 本地推理服务器与端口检测，安全处理 HTTP 401 鉴权。 | 为 Mac 开发者提供极致响应速度与 100% 隐私安全的本地模型编码体验。 | P0 | M0/M1 | `FEAT-ENG-002` | 1. 识别 8000 端口服务；<br>2. 提示需配置 API Key，杜绝凭据泄露。 | **Implemented** |
+| `FEAT-MOD-002` | 多提供商注册表架构 | 构建 `@nightglide/providers`，支持多 Provider 并存、唯一标识与模型限定符。 | 彻底打破单供应商绑定，允许本地端点与多个云端网关协同共存。 | P0 | M1 | `FEAT-CORE-001` | 1. 拒绝重复 Provider ID 与非法 URL；<br>2. 严格限定模型 ID 为 `${provider}/${model}`。 | **Implemented** |
+| `FEAT-MOD-003` | 物理网络位置绝对判定 | `resolveEndpointLocality` 严格基于回环 IP/Hostname 分类，不轻信 Display Name。 | 避免恶意/误导配置以“local”命名却实际转发至公网的问题。 | P0 | M1 | `FEAT-MOD-002` | 1. 回环 IP 判定为 `local`；<br>2. 所有外部域名/公网 IP 强制为 `remote`。 | **Implemented** |
+| `FEAT-MOD-004` | 云端主流服务商安全托管 | 支持 OpenAI、Anthropic、Ollama、oMLX，通过环境变量安全提取密钥。 | 为需要超强推理能力的复杂项目提供高阶云端模型选择，绝不在普通配置写明文。 | P1 | M1 | `FEAT-CFG-005` | 1. 从环境变量安全解析 Key；<br>2. 诊断报告中密钥严格脱敏。 | **Implemented** |
+| `FEAT-MOD-005` | 提供商连通性探针与 CLI | 提供 `nightglide providers` 与 `nightglide models` 命令行查看端点与模型。 | 开发者可随时查看每个端点的物理属性、认证状态与连通性。 | P0 | M1 | `FEAT-MOD-002` | 1. 命令行清晰输出表格与连通状态；<br>2. 区分本地与云端标识。 | **Implemented** |
 
 ---
 
-## 4. 智能体能力与工作流 (`FEAT-AGT`)
+## 4. 工作负载感知模型路由与协作 (`FEAT-ROUT` & `FEAT-AGT`)
 
 | 特性编号 | 功能名称 | 功能描述 | 用户与架构价值 | 优先级 | 目标里程碑 | 依赖项 | 验收标准 (Acceptance Criteria) | 状态 |
 | :--- | :--- | :--- | :--- | :---: | :---: | :--- | :--- | :---: |
-| `FEAT-AGT-001` | 只读工作区代码感知 | 提供 `read`、`find`、`grep` 工具，供智能体自主探索目录与分析依赖。 | 赋予智能体理解项目上下文的能力，且零写操作风险。 | P0 | M0 | `FEAT-ENG-004` | 1. 准确定位文件并返回只读内容；<br>2. 路径超出工作区根目录时安全拒绝。 | **Implemented** |
-| `FEAT-AGT-002` | 沙箱文件原子编辑 | 提供 `edit` 与 `write` 工具，支持精准行替换或全文写入。 | 实现真正的自动化代码补全与重构。 | P0 | M1 | `FEAT-AGT-001` | 1. 写入前生成 Diff 暂存；<br>2. 必须等待用户审批授权后才落盘。 | **In Progress** |
-| `FEAT-AGT-003` | 受审计 Shell 命令执行 | 提供受限 `bash` 执行通道，用于执行构建与测试脚本。 | 闭环验证代码正确性（运行 `bun test` 等）。 | P1 | M1 | `FEAT-SEC-001` | 1. 默认禁用，开启时逐条审计；<br>2. 绝对禁止隐蔽后台执行。 | **Planned** |
-| `FEAT-AGT-004` | 自动化语法与报错自愈 | 运行测试报错后，智能体自动读取错误堆栈并提出二次修正方案。 | 减少人工反复复制粘贴报错的疲劳，提升编码吞吐率。 | P1 | M2 | `FEAT-AGT-002` | 1. 限制自愈最大尝试轮数（<=3）；<br>2. 连续失败时主动向用户求助。 | **Planned** |
-| `FEAT-AGT-005` | 角色解耦多智能体协作 | 编排主控、探索者、规划者、编码者与代码审查员（Reviewer）子代理。 | 应对大型复杂项目的模块化重构，提升代码生成的专业度与准确率。 | P1 | M3 | `FEAT-CORE-001` | 1. 细化职责分工；<br>2. 审查员能够独立拦截不合格代码产物。 | **Planned** |
-| `FEAT-AGT-006` | 长程任务分解与检查点 | 将复杂需求分解为多阶段任务树，并支持断点保存与恢复。 | 解决长上下文遗忘与终端崩溃后任务无法续接的问题。 | P2 | M3 | `FEAT-AGT-005` | 1. 任务进度可视化展示；<br>2. 支持从任意历史检查点重新拉起。 | **Research Required** |
+| `FEAT-ROUT-001` | 任务意图与复杂度分类器 | 支持 8 类任务类型 (`explore`, `explain`, `plan`, `implement`, `debug`, `review`, `test`, `summarize`)。 | 智能识别任务特征，为后续精准路由派发提供结构化输入。 | P0 | M1 | `FEAT-CORE-001` | 1. 准确识别中英文任务 Prompt；<br>2. 结构化输出能力需求与复杂度。 | **Implemented** |
+| `FEAT-ROUT-002` | 四大智能路由工作模式 | 实现 `LOCAL`、`BALANCED`、`PERFORMANCE`、`MANUAL` 策略矩阵。 | 满足不同安全合规与算力预算场景的需求。 | P0 | M1 | `FEAT-ROUT-001` | 1. LOCAL 模式绝对禁止云端；<br>2. BALANCED 模式复杂任务在授权时协同云端。 | **Implemented** |
+| `FEAT-ROUT-003` | 隐私敏感回退策略链 | Fallback 严格遵守当前路由模式与隐私约束，本地故障决不静默发往云端。 | 彻底杜绝数据在未经明确授权情况下的越权泄露。 | P0 | M1 | `FEAT-ROUT-002` | 1. LOCAL 回退链仅含本地模型；<br>2. 耗尽时抛出明确异常。 | **Implemented** |
+| `FEAT-ROUT-004` | 请求前底层硬件守卫 | 通过 OMP `assertDispatchModel` 钩子在发送网络包前拦截非合规请求。 | 即使 Prompt 注入或上游意外切换，也无法突破物理安全防线。 | P0 | M1 | `FEAT-ENG-002` | 1. 违规外发时抛出 `RoutingPolicyViolationError`；<br>2. 物理阻断连接建立。 | **Implemented** |
+| `FEAT-AGT-005` | 本地/云端跨模型协同工作流 | 实现本地 Explorer 扫码代码库 + 云端 Planner 制定架构方案的接力协同。 | 结合本地隐私零成本与云端高智商推理的最优解。 | P0 | M1 | `FEAT-ROUT-002` | 1. 本地生成摘要，最小必要上下文传云端；<br>2. 最终成果统一汇聚。 | **Implemented** |
 
 ---
 
@@ -65,48 +63,22 @@
 | 特性编号 | 功能名称 | 功能描述 | 用户与架构价值 | 优先级 | 目标里程碑 | 依赖项 | 验收标准 (Acceptance Criteria) | 状态 |
 | :--- | :--- | :--- | :--- | :---: | :---: | :--- | :--- | :---: |
 | `FEAT-UI-001` | OpenTUI 终端应用挂载 | 使用 OpenTUI React 渲染器构建根界面与声明式组件树。 | 摆脱传统终端模板字符串拼接，实现高帧率抗抖动的现代 TUI。 | P0 | M0 | 无 | 1. 成功挂载应用；<br>2. 监听退出信号并复原终端。 | **Implemented** |
-| `FEAT-UI-002` | 苍穹视觉字标与导航头 | 渲染 Nightglide 艺术字标、当前工作空间、引擎就绪状态。 | 强化品牌认知，给用户沉浸、专业且优雅的第一视觉印象。 | P0 | M0 | `FEAT-UI-001` | 1. 80 宽终端自动折叠次要标签；<br>2. 视觉层级清晰通透。 | **Implemented** |
-| `FEAT-UI-003` | 消息流式时间轴与指示器 | 结构化展示对话气泡，支持 Markdown 渲染与思考中微动效。 | 清晰区分用户输入、AI 思考过程与最终输出代码。 | P0 | M0 | `FEAT-CORE-002` | 1. 流式吐字平滑无跳变；<br>2. 思考中状态具备呼吸动画。 | **Implemented** |
-| `FEAT-UI-004` | 多行输入编辑器 Composer | 支持文本输入、回车提交、Shift+回车换行、历史命令上下翻查。 | 提供完全符合现代代码编辑器习惯的输入交互体验。 | P0 | M0 | `FEAT-UI-001` | 1. 键盘光标定位准确；<br>2. 粘贴多行文本不发生截断错位。 | **Implemented** |
-| `FEAT-UI-005` | 实时状态栏与环境指标 | 渲染终端分辨率、当前主题名、网络连通性与快捷键提示符。 | 随时获知运行环境状态，无需猜测快捷键用法。 | P0 | M0 | `FEAT-UI-001` | 1. 随终端 Resize 动态自适应；<br>2. 提供明确的按键指引。 | **Implemented** |
-| `FEAT-UI-006` | 工具调用生命周期卡片 | 可视化呈现正在运行的工具名称、入参、执行耗时与返回摘要。 | 消除 AI“后台偷偷操作”的黑盒恐惧，增强用户知情权。 | P0 | M0 | `FEAT-CORE-002` | 1. 区分只读与写操作色调；<br>2. 错误结果标红高亮展示。 | **Implemented** |
-| `FEAT-UI-007` | 语法着色 Diff 审查弹窗 | 终端内分栏或单栏对比代码修改，高亮新增行（绿色）与删除行（红色）。 | 赋予用户在最终落盘前进行肉眼审查与逐块审批的掌控力。 | P0 | M1 | `FEAT-AGT-002` | 1. 准确展示差异行号；<br>2. 支持敲击 `y` / `n` 确认或驳回。 | **Planned** |
-| `FEAT-UI-008` | 终端尺寸动态自适应 | 监听终端 Resize 事件，自适应布局从 `80x24` 至超宽屏幕。 | 避免小窗口下内容被生硬截断，超宽屏幕下合理利用横向空间。 | P0 | M0 | `FEAT-UI-001` | 1. 改变窗口大小时界面无撕裂；<br>2. 80 宽终端优雅降级折叠。 | **Implemented** |
-| `FEAT-UX-001` | 首次启动苍穹欢迎向导 | 引导用户认识 Nightglide，检测环境并协助选择使用模式与主题。 | 降低新用户接触终端 AI 工具的认知门槛，提升第一印象满意度。 | P0 | M0 | `FEAT-UI-002` | 1. 初次启动自动触发展示；<br>2. 提供“跳过”与“完整引导”选项。 | **Implemented** |
-| `FEAT-UX-002` | 双模态自由切换 | 提供“向导模式 (Guided)”与“专家模式 (Expert)”，支持 Tab 快捷键切换。 | 兼顾初学者的详细提示与高阶工程师的极致紧凑高效率。 | P1 | M0 | `FEAT-CFG-002` | 1. 切换时界面即时重绘；<br>2. 配置持久化至本地用户设置。 | **In Progress** |
-| `FEAT-UX-003` | 无模型优雅降级引导 | 检测到未配置模型时不报错退出，引导选择本地 oMLX、云端或演示模式。 | 彻底杜绝传统 CLI 启动即崩溃退出的恶劣体验。 | P0 | M0 | `FEAT-ENG-005` | 1. 拦截 `MODEL_NOT_CONFIGURED` 异常；<br>2. 显示快捷配置入口卡片。 | **In Progress** |
-| `FEAT-UX-004` | 免 Key 确定性流式演示 | 启动 `nightglide demo`，无需配置任何密钥即可体验完整流式交互。 | 便于用户零门槛评估软件质感与功能完整度，便于社区快速上手。 | P0 | M0 | `FEAT-ENG-001` | 1. 零配置 1 秒内拉起；<br>2. 确定性流式输出模拟实战场景。 | **Implemented** |
-| `FEAT-UX-005` | 苍穹主题热切换 | 在界面中敲击快捷键或配置切换 4 套官方主题（Midnight, Aurora 等）。 | 满足不同光照环境与个人美学偏好，长时间编码保护视力。 | P0 | M0 | `packages/themes` | 1. 主题切换延迟 <20ms；<br>2. 全界面语义色统一刷新。 | **Implemented** |
-| `FEAT-UX-006` | 双重确认二次授权交互 | 涉及写文件或执行命令时，强制冻结输入并提示用户显式键入审批。 | 守住安全底线，彻底杜绝代码被意外修改。 | P0 | M1 | `FEAT-SEC-001` | 1. 必须手动按键确认才执行；<br>2. 超时或按 Esc 自动安全取消。 | **Planned** |
+| `FEAT-UI-002` | 苍穹视觉字标与五维导航头 | 渲染 Nightglide 艺术字标、当前工作空间、导航 Tab `[1-5]`。 | 强化品牌认知，给用户沉浸、专业且优雅的第一视觉印象。 | P0 | M0/M1 | `FEAT-UI-001` | 1. 包含 Welcome, Flight Deck, Setup, Themes, Model Matrix；<br>2. 视觉层级清晰。 | **Implemented** |
+| `FEAT-UI-003` | 多智能体实时监视器 AgentMonitor | 可视化展示参与当前任务的各 Agent 角色、模型、本地/云端标识、状态与 Token。 | 消除多智能体后台协作的黑盒感，实时掌握各模型工作进度。 | P0 | M1 | `FEAT-AGT-005` | 1. 实时更新各 Subagent 状态；<br>2. 清晰展示 LOCAL/CLOUD 标签。 | **Implemented** |
+| `FEAT-UI-004` | 路由决策透明解释卡片 | 在任务派发前呈现选定模型、任务类别、预估成本与决策依据。 | 让用户完全清楚为什么选用该模型，避免盲目消耗云端 Token。 | P0 | M1 | `FEAT-ROUT-002` | 1. 卡片视觉突出、不抢占主对话区；<br>2. 理由通俗易懂。 | **Implemented** |
+| `FEAT-UI-005` | 模型角色分配交互矩阵 Screen | 交互式界面配置 `MAIN`、`EXPLORE`、`PLAN`、`IMPLEMENT`、`REVIEW` 模型分配。 | 用户无需手动修改 YAML 即可直观分配与切换角色模型。 | P0 | M1 | `FEAT-ROUT-002` | 1. 支持空格键切换路由模式；<br>2. 支持 C 键开关云端授权。 | **Implemented** |
+| `FEAT-UI-006` | 四大 Celestial 天象主题 | Midnight Flight、Aurora、Cloudlight、Daybreak 主题及对比度合规。 | 兼顾暗色极客与明色办公环境，保持 Nightglide 苍穹空灵的美学品位。 | P0 | M0 | `FEAT-UI-001` | 1. 4 款主题任意切换即时生效；<br>2. 对比度符合无障碍规范。 | **Implemented** |
 
 ---
 
-## 6. 配置体系与安全防护 (`FEAT-CFG` & `FEAT-SEC`)
+## 6. 配置中心与安全防护 (`FEAT-CFG` & `FEAT-SEC`)
 
 | 特性编号 | 功能名称 | 功能描述 | 用户与架构价值 | 优先级 | 目标里程碑 | 依赖项 | 验收标准 (Acceptance Criteria) | 状态 |
 | :--- | :--- | :--- | :--- | :---: | :---: | :--- | :--- | :---: |
-| `FEAT-CFG-001` | 跨平台标准配置路径 | 遵循 XDG 规范，自动定位 macOS/Linux 与 Windows 用户配置目录。 | 符合操作系统原生标准，便于用户备份、同步或集中管理。 | P0 | M0 | 无 | 1. 准确解析目标路径；<br>2. 目录不存在时安全自动递归创建。 | **Implemented** |
-| `FEAT-CFG-002` | 严格 JSON Schema 校验 | 运行时加载配置并执行严格字段类型校验与未知属性清洗。 | 防止配置损坏导致程序崩溃，为用户提供友好的字段错误提示。 | P0 | M0 | `FEAT-CFG-001` | 1. 校验失败时回退到默认预设；<br>2. 输出具体的错误键路径。 | **Implemented** |
-| `FEAT-CFG-003` | 默认配置模板自生成 | 当用户初次使用无配置时，自动生成包含注释说明的标准配置模板。 | 开箱即用，降低用户手写配置的学习成本。 | P0 | M0 | `FEAT-CFG-002` | 1. 自动写入默认结构；<br>2. 保证默认权限处于最高安全级别。 | **Implemented** |
-| `FEAT-CFG-004` | 分层配置合并优先级 | 支持环境变量 > 局部项目配置 (`.nightglide/config.json`) > 全局配置。 | 方便团队针对特定代码库统一定义专用模型与提示词规则。 | P1 | M1 | `FEAT-CFG-001` | 1. 逐层深合并；<br>2. 局部配置不污染全局默认值。 | **Planned** |
-| `FEAT-CFG-005` | 凭据安全提取与无明文 | 禁止将 API Key 写入普通 JSON 文件，仅从受保护环境读取。 | 彻底杜绝用户误将包含密钥的配置文件提交到公共 Git 仓库。 | P0 | M0 | `FEAT-CFG-001` | 1. 配置文件 Schema 绝不包含明文 Key；<br>2. 自动从标准环境变量安全提取。 | **In Progress** |
+| `FEAT-CFG-001` | 多 Provider 与路由配置结构 | 扩展 `NightglideConfig`，原生包含 `providers` 映射表与 `routing` 策略配置。 | 规范化持久化存储用户的所有模型偏好、角色绑定与云端开关。 | P0 | M1 | 无 | 1. 自动兼容旧版配置；<br>2. 结构自愈与校验。 | **Implemented** |
+| `FEAT-CFG-005` | 凭据安全提取与无明文 | 从环境变量（如 `OPENAI_API_KEY`）安全解析 Key，绝不在诊断或输出打印明文。 | 彻底杜绝用户误将包含密钥的配置文件提交到公共 Git 仓库。 | P0 | M0/M1 | `FEAT-CFG-001` | 1. 配置文件 Schema 默认不含明文 Key；<br>2. 日志脱敏保护。 | **Implemented** |
 | `FEAT-SEC-001` | 底层防篡改权限看门狗 | 在 SDK 调用与系统执行层之间构建硬件级别的确定性逻辑拦截层。 | 无论大模型如何被 Prompt 注入，均无法绕过物理权限门禁。 | P0 | M0 | `FEAT-CORE-003` | 1. 逻辑不可被模型指令改写；<br>2. 权限未命中时抛出强类型异常。 | **Implemented** |
-| `FEAT-SEC-002` | 上游 SDK 隔离运行 | 强制配置 `Settings.isolated()` 与 `disableExtensionDiscovery: true`。 | 杜绝上游未审计扩展脚本入侵，保证 Nightglide 运行状态纯净独立。 | P0 | M0 | `FEAT-ENG-002` | 1. 隔离宿主全局配置；<br>2. 禁用环境隐式扩展探测。 | **Implemented** |
-| `FEAT-SEC-003` | 会话内存化防泄露 | 会话历史仅存于运行进程内存中，不隐式向宿主目录写未经确认的日志。 | 保护隐私代码与本地开发上下文不留痕。 | P0 | M0 | `FEAT-ENG-003` | 1. 退出后无临时缓存残留；<br>2. 内存生命周期随会话释放而销毁。 | **Implemented** |
-| `FEAT-SEC-004` | 敏感密钥脱敏展示 | 在日志输出、UI 调试面板与错误提示中，自动匹配并掩码（`***`）密钥。 | 防范截屏分享、录屏演示或日志上传时发生密钥无意泄露。 | P0 | M0 | `FEAT-UI-003` | 1. 正则匹配主流 Key 格式；<br>2. 脱敏后仅保留前 3 位与后 4 位。 | **In Progress** |
-| `FEAT-SEC-005` | Git 工作树沙箱隔离保护 | 针对复杂写操作，在独立的 Git Worktree 中执行并验证。 | 保持用户主工作区不受未经验证修改的影响。（明确声明 Worktree 仅用于代码版本隔离，并非 OS 级别的沙箱容器）。 | P1 | M2 | `FEAT-AGT-002` | 1. 在独立 Worktree 执行改动；<br>2. 用户满意后方合并回当前分支。 | **Planned** |
-
----
-
-## 7. 开发者体验与交付工程 (`FEAT-DEV`)
-
-| 特性编号 | 功能名称 | 功能描述 | 用户与架构价值 | 优先级 | 目标里程碑 | 依赖项 | 验收标准 (Acceptance Criteria) | 状态 |
-| :--- | :--- | :--- | :--- | :---: | :---: | :--- | :--- | :---: |
-| `FEAT-DEV-001` | 全方位诊断命令 `doctor` | 执行环境、工具链、上游依赖及本地推理端口的自动化健康体检。 | 协助用户和开发者一键排查配置缺陷，降低客服与排障支持成本。 | P0 | M0 | `FEAT-ENG-005` | 1. 准确检测 Bun、Git、OMP、OpenTUI；<br>2. 遇缺失提供具体修复指南。 | **Implemented** |
-| `FEAT-DEV-002` | 离线确定性单测套件 | 基于 Bun test runner 构建，纯使用 Mock 引擎，0 网络依赖。 | CI/CD 构建流水线在毫秒级执行完毕，杜绝因外部网络抖动导致构建失败。 | P0 | M0 | `FEAT-ENG-001` | 1. 单测执行时间 <10s；<br>2. 核心功能测试覆盖率 >85%。 | **Implemented** |
-| `FEAT-DEV-003` | 严格编译期类型检查 | 编排 `bun run typecheck` 执行全 Monorepo 的 `tsc --noEmit`。 | 杜绝任何隐藏的类型兼容风险，保障企业级软件工程交付标准。 | P0 | M0 | 无 | 1. 零类型报错；<br>2. 零隐式 any 出现。 | **Implemented** |
-| `FEAT-DEV-004` | 终端异常恢复防花屏 | 监听并拦截 `SIGINT` / `SIGTERM`，确保无论何种退出均复原终端状态。 | 保护开发者终端环境整洁，彻底解决传统终端应用崩溃后光标丢失痛点。 | P0 | M0 | `FEAT-UI-001` | 1. 狂按 Ctrl+C 正常退出；<br>2. 终端光标完好可见，无残留黑屏。 | **Implemented** |
-| `FEAT-DEV-005` | 独立单二进制文件打包 | 利用 Bun 打包能力将整套应用与 React 终端引擎打包为单一静态可执行文件。 | 用户无需安装 Node.js 或 Bun 即可即开即用，极大简化跨设备分发。 | P1 | M1 | `FEAT-UI-001` | 1. 生成跨平台二进制包；<br>2. 独立运行无动态库缺失问题。 | **Planned** |
+| `FEAT-SEC-004` | 敏感密钥脱敏展示 | 在日志输出、UI 调试面板与错误提示中，自动屏蔽敏感密钥。 | 防范截屏分享、录屏演示或日志上传时发生密钥无意泄露。 | P0 | M1 | `FEAT-MOD-004` | 1. 诊断接口仅返回 `hasAuth: true`；<br>2. 绝不在任何 public 字段打印 raw key。 | **Implemented** |
 
 ---
 *(本矩阵作为 Nightglide 全版本研发周期的总需求看板与功能追溯基准)*

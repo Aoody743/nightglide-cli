@@ -248,4 +248,50 @@ stateDiagram-v2
    - 每一个状态颜色均伴随独特的图形符号（成功伴随 `✔`, 警告伴随 `⚠`, 错误伴随 `✖`, 运行伴随 `⚡`）。
 
 ---
+
+## 9. 多智能体协作监视器规范 (`AgentMonitor`)
+
+`AgentMonitor` 用于多 Agent 并行或接力执行期间在终端对话流上方呈现参与者矩阵：
+
+- **结构与布局:**
+  - 容器采用 `theme.colors.surface`，单线细边框。
+  - 顶部标题栏：`✦ MULTI-AGENT COLLABORATION MONITOR (N Contributing Agents)`，右侧提供 `[Toggle: M]` 快捷收起/展开指示。
+  - 子智能体卡片行：
+    - `[ROLE]` 标签：主强调色高亮（`[EXPLORE]`, `[PLAN]`, `[REVIEW]`, `[IMPLEMENT]`）。
+    - 模型限定符与物理属性标签：`omlx/qwen2.5-coder-7b (LOCAL)` 或 `openai/gpt-4o (CLOUD)`。
+    - 任务简述：弱化文本截断展示（`Task: Inspect codebase...`）。
+    - 状态指示灯：执行中显示警告色 `● THINKING` / `● STREAMING`，完成显示绿色 `● COMPLETED`，失败显示红色 `● ERROR`。
+    - 统计数据：右侧输出耗费的 `N tokens`。
+
+---
+
+## 10. 模型矩阵与角色配置视图规范 (`ModelAssignmentView`)
+
+提供免编辑 YAML 文件的直观角色分配与路由策略交互面板（导航 Tab `[5]`）：
+
+- **顶部策略控制栏:**
+  - 呈现当前工作模式 `[LOCAL]` / `[BALANCED]` / `[PERFORMANCE]` / `[MANUAL]` 与模式说明。
+  - 呈现云端 AI 授权状态：`AUTHORIZED (YES)`（绿色）或 `LOCKED (NO)`（红色）。
+- **角色分配表格:**
+  - 六大角色独立行：`MAIN`, `EXPLORE`, `PLAN`, `IMPLEMENT`, `REVIEW`, `SCOUT`。
+  - 呈现当前分配的模型 ID 及 `[LOCAL]` / `[CLOUD]` 属性徽章。
+  - 键盘操作规范：
+    - `↑ / ↓` 或 `k / j`: 上下移动光标高亮当前角色行；
+    - `Space` / `Enter`: 轮换路由策略模式；
+    - `c`: 快捷开关云端授权；
+    - `Esc`: 返回前一对话视口。
+
+---
+
+## 11. 路由决策透明卡片规范 (`RoutingExplanation`)
+
+当 Task Director 作出智能派发决策时，向用户呈现可解释性卡片：
+
+- **视觉呈现:**
+  - 单线细边框，`theme.colors.surfaceElevated` 背景。
+  - 第一行：`⚡ [Intelligent Routing]` + 任务分类与目标角色 + 物理属性与模式徽章。
+  - 第二行：选定模型与提供商 ID + 预估成本。
+  - 第三行：直白的决策理由说明（如 `BALANCED mode: Routine task 'explore' kept on local model for speed and zero cost.`）。
+
+---
 *(本文档为 Nightglide 视觉与交互研发的唯一定向标准，UI 组件实现必须严格遵循上述 Token 与规范)*

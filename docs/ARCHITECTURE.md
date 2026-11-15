@@ -2,7 +2,7 @@
 
 > **"Build beyond the horizon." / "漫翔苍穹，构筑所想。"**
 
-本文档详细阐述 Nightglide 的系统总体架构、模块分层边界、数据与事件流转模型、会话生命周期管理以及对上游 Oh My Pi (OMP) SDK 的防污染隔离设计。
+本文档详细阐述 Nightglide 的系统总体架构、模块分层边界、多提供商注册表、工作负载感知模型路由（Workload-Aware Model Router）、本地与云端智能体协同流转模型（Local + Cloud Collaboration）、会话生命周期管理以及对上游 Oh My Pi (OMP) SDK 的防污染隔离设计。
 
 ---
 
@@ -11,13 +11,17 @@
 1. **强隔离与防污染 (Strict Isolation):**
    - Nightglide 拥有完全独立的配置体系与会话管理，绝不隐式继承用户全局未授权的 ambient extensions、MCP servers 或宿主历史凭证。
    - 上游 SDK 的内部类型与实现细节严格封装在 `packages/engine` 内部，绝不泄漏至 UI 表现层。
-2. **抽象与确定性 (Deterministic Engine Abstraction):**
+2. **多提供商中立与多模型协同 (Multi-Provider & Cross-Model Collaboration):**
+   - 彻底打破单供应商绑定。通过 `@nightglide/providers` 支持本地端侧模型（oMLX, Ollama, LM Studio）与云端大模型（OpenAI, Anthropic, DeepSeek）并存。
+   - 依托 `@nightglide/routing` 实现工作负载自适应路由（LOCAL, BALANCED, PERFORMANCE, MANUAL），协调轻量端侧模型与强推理云端模型高效接力。
+3. **物理网络位置绝对优先与隐私铁律 (Physical Locality & Zero Leakage):**
+   - 严禁轻信 Provider 名称；物理网络 Locality 严格依据解析后的网络端点地址（回环地址为 `local`，其余强制为 `remote`）。
+   - 在 `LOCAL` 模式下，底层硬件级守卫拦截任何未经授权的外网 HTTP 请求，从物理层面杜绝代码资产泄漏。
+4. **抽象与确定性 (Deterministic Engine Abstraction):**
    - 表现层（TUI）仅依赖统一的抽象接口 `AgentEngine` 与 `AgentSession`。
    - 系统内置确定性 `MockAgentEngine`，使 UI 演示、快速验证与自动化单元测试无需依赖任何外部 AI 模型即可 100% 稳定运行。
-3. **响应式与类型安全事件流 (Type-safe Event Streaming):**
-   - 采用标准 TypeScript Discriminated Union 规范事件流（`AgentEvent`），包括增量文本 (`text_delta`)、工具调用生命周期 (`tool_start`, `tool_end`)、代理状态 (`status`) 与终止结算 (`done`)。
-4. **极致美学与终端鲁棒性 (Terminal Aesthetics & Robustness):**
-   - 深度集成 OpenTUI 原生与 React 声明式渲染器，提供基于语义 Token 的多套苍穹主题，保证在 `80x24` 至高分宽屏终端中平滑缩放、不花屏、无内存泄漏。
+5. **响应式与类型安全事件流 (Type-safe Event Streaming):**
+   - 采用标准 TypeScript Discriminated Union 规范事件流（`AgentEvent`），涵盖单模型生成、工具调用、路由决策透明解释（`routing_decision`）以及子智能体生命周期监视（`subagent_start`, `subagent_delta`, `subagent_end`）。
 
 ---
 
@@ -28,14 +32,24 @@ flowchart TD
     subgraph UI ["表现层 (apps/cli)"]
         CLI["CLI Command Router\n(index.ts / commands)"]
         App["OpenTUI React App\n(App.tsx)"]
-        Screens["Screens\n(Welcome / Chat / Setup / Themes)"]
-        Components["Components\n(Header / Composer / StatusBar / AgentStatus)"]
+        Screens["Screens\n(Welcome / Chat / Setup / Themes / Models)"]
+        Components["Components\n(Header / Composer / StatusBar / AgentMonitor / RoutingExplanation)"]
     end
 
     subgraph Core ["契约与类型层 (packages/core)"]
         Contracts["AgentEngine / AgentSession\n(contracts.ts)"]
-        Events["AgentEvent (Discriminated Union)\n(events.ts)"]
+        Events["AgentEvent (10类强类型事件)\n(events.ts)"]
         Errors["Typed Error Hierarchy\n(errors.ts)"]
+    end
+
+    subgraph ProvidersPkg ["提供商管理层 (packages/providers)"]
+        ProviderRegistry["ProviderRegistry\n(registry.ts)"]
+        LocalityChecker["Endpoint Locality Resolver\n(locality.ts)"]
+    end
+
+    subgraph RoutingPkg ["模型路由与编排层 (packages/routing)"]
+        TaskClassifier["TaskClassifier (8类任务分类)\n(classifier.ts)"]
+        ModelRouter["WorkloadModelRouter (4大运行模式)\n(router.ts)"]
     end
 
     subgraph Themes ["主题设计系统 (packages/themes)"]
@@ -51,12 +65,12 @@ flowchart TD
     end
 
     subgraph Engine ["执行引擎层 (packages/engine)"]
-        MockEngine["MockAgentEngine\n(Deterministic Simulation)"]
-        OMPAdapter["OmpAgentEngine / Adapter\n(Isolated Sandbox)"]
+        MockEngine["MockAgentEngine\n(Multi-Agent Simulation)"]
+        OMPAdapter["OmpAgentEngine / Adapter\n(Native Subagents & assertDispatchModel)"]
     end
 
     subgraph Upstream ["底层运行时与上游 SDK"]
-        OMPSDK["@oh-my-pi/pi-coding-agent"]
+        OMPSDK["@oh-my-pi/pi-coding-agent\n(SessionManager / SubagentEventBus / Task Tool)"]
         OpenTUI["@opentui/core & @opentui/react"]
         BunRuntime["Bun Runtime & Test Runner"]
     end
@@ -77,6 +91,10 @@ flowchart TD
     Engine --> Events
     Engine --> Errors
 
+    RoutingPkg --> ProvidersPkg
+    RoutingPkg --> Core
+    Engine --> RoutingPkg
+
     MockEngine --> Events
     OMPAdapter --> OMPSDK
     OMPAdapter --> Events
@@ -91,124 +109,102 @@ flowchart TD
 
 | 模块包路径 | 职责定位 | 核心依赖 | 严禁行为 |
 | :--- | :--- | :--- | :--- |
-| `packages/core` | 纯类型契约与错误层。定义 `AgentEngine`, `AgentSession`, `AgentEvent`, `NightglideError` 等。 | 无内部或第三方重依赖。 | 严禁依赖任何具体运行时实现或上游 SDK。 |
+| `packages/core` | 纯类型契约与错误层。定义 `AgentEngine`, `AgentSession`, `AgentEvent`, `RoutingDecision`, `ModelDescriptor`, `NightglideError` 等。 | 无内部或第三方重依赖。 | 严禁依赖任何具体运行时实现或上游 SDK。 |
+| `packages/providers` | 多提供商注册表、物理网络位置判定与健康探测。 | `packages/core`, `packages/config` | 严禁日志输出未脱敏 API Key；严禁轻信 Display Name 判定 Locality。 |
+| `packages/routing` | 工作负载感知任务分类与智能模型路由矩阵。包含 8 类任务识别与 4 类路由模式。 | `packages/core`, `packages/config`, `packages/providers` | 严禁在 LOCAL 模式下产生任何云端候选；严禁越权静默回退。 |
 | `packages/themes` | 苍穹设计系统的色彩与主题 Token，提供运行时主题切换与订阅管理器。 | 仅依赖标准数据结构。 | 严禁硬编码颜色值至业务逻辑组件中。 |
-| `packages/config` | 跨平台配置目录管理、JSON Schema 校验、默认配置生成与安全存取。 | `packages/core` | 严禁明文打印或导出 API Key 及凭据。 |
-| `packages/engine` | 引擎适配器实现层。包含确定性 `MockAgentEngine` 与真实上游 `@oh-my-pi/pi-coding-agent` 隔离适配器。 | `packages/core`, `@oh-my-pi/pi-coding-agent` | 严禁向外部导出任何 OMP SDK 的私有内部类。 |
-| `apps/cli` | 终端应用入口点、CLI 子命令路由与 OpenTUI React 界面视图。 | `@nightglide/*`, `@opentui/*`, `react` | 严禁直接与底层文件系统或未封装的 OMP 实例通信。 |
+| `packages/config` | 跨平台配置目录管理、JSON Schema 校验、多提供商配置与路由模式持久化。 | `packages/core` | 严禁将明文凭据强制写入常规配置文件。 |
+| `packages/engine` | 引擎适配器实现层。包含确定性模拟引擎与上游 OMP 隔离适配器（接入 `subagentEventBus` 与原生 `task`）。 | `@nightglide/*`, `@oh-my-pi/pi-coding-agent` | 严禁向外部导出任何 OMP SDK 的私有内部类。 |
+| `apps/cli` | 终端应用入口点、CLI 子命令（`providers`, `models`, `doctor`, `demo`）与 OpenTUI React 界面视图。 | `@nightglide/*`, `@opentui/*`, `react` | 严禁直接与底层文件系统或未封装的 OMP 实例通信。 |
 
 ---
 
-## 4. 事件驱动与会话生命周期
+## 4. 本地与云端协同流转模型 (Local + Cloud Collaboration)
 
-### 4.1 会话建立与消息流转 (Sequence Diagram)
+在 BALANCED 模式下，系统能够协同本地端侧模型与云端强模型，实现兼顾隐私安全、零成本探索与高阶推理方案的无缝闭环：
 
 ```mermaid
 sequenceDiagram
     autonumber
     actor User as 用户 (Terminal)
     participant UI as OpenTUI React View
-    participant Engine as AgentEngine (Mock / OMP)
-    participant Session as AgentSession
-    participant SDK as Upstream OMP / LLM
+    participant Director as Nightglide Task Director (Routing)
+    participant Explorer as Local Explorer (omlx/qwen2.5-coder)
+    participant Planner as Cloud Planner (openai/gpt-4o)
+    participant Synthesizer as Main Synthesizer
 
-    User->>UI: 输入自然语言指令 (Composer)
-    UI->>Session: sendMessage(prompt)
-    Session-->>UI: emit { type: "status", status: "thinking" }
+    User->>UI: 提交任务 ("分析代码库并制定安全重构方案")
+    UI->>Director: routeTask(prompt, { mode: "BALANCED" })
+    Director-->>UI: emit { type: "routing_decision", decision: ... }
     
-    opt 工具探测与调用
-        Session->>SDK: 执行只读探测 (read / find / grep)
-        Session-->>UI: emit { type: "tool_start", toolName, input }
-        SDK-->>Session: 返回探测数据
-        Session-->>UI: emit { type: "tool_end", toolName, result }
+    rect rgb(20, 35, 45)
+    note right of Director: 阶段一：本地安全探索 (零云端网络外发)
+    Director->>Explorer: 派发 explore 子任务 (只读扫描)
+    Explorer-->>UI: emit { type: "subagent_start", role: "explore", locality: "local" }
+    Explorer->>Explorer: 扫描本地项目关键符号与模块依赖
+    Explorer-->>UI: emit { type: "subagent_delta", delta: "找到 12 个核心文件..." }
+    Explorer-->>Director: 返回提炼后的结构纲要报告
+    Explorer-->>UI: emit { type: "subagent_end", result: "摘要已生成" }
     end
 
-    loop 流式文本生成
-        Session->>SDK: 接收文本 Token
-        Session-->>UI: emit { type: "text_delta", delta: "..." }
+    rect rgb(35, 20, 45)
+    note right of Director: 阶段二：云端架构规划 (仅发送最小必要上下文)
+    Director->>Planner: 派发 plan 子任务 (携带摘要，云端已授权)
+    Planner-->>UI: emit { type: "subagent_start", role: "plan", locality: "remote" }
+    Planner->>Planner: 运用强推理能力生成分阶段架构演进路线
+    Planner-->>UI: emit { type: "subagent_delta", delta: "阶段1: 接口解耦..." }
+    Planner-->>Director: 返回规划蓝图
+    Planner-->>UI: emit { type: "subagent_end", result: "蓝图生成完成" }
     end
 
-    Session-->>UI: emit { type: "status", status: "completed" }
-    Session-->>UI: emit { type: "done", summary: "..." }
-    UI->>User: 渲染完整流式答复与工具结果卡片
+    Director->>Synthesizer: 汇聚多智能体成果并交付
+    Synthesizer-->>UI: emit { type: "text_delta", delta: "### 协作执行完成..." }
+    Synthesizer-->>UI: emit { type: "done", summary: "多模型协作完成" }
+    UI->>User: 渲染完整流式规划蓝图与 AgentMonitor 实时卡片
 ```
 
-### 4.2 统一事件模型定义 (`AgentEvent`)
+---
+
+## 5. 原生 Subagent 事件捕获与归一化
+
+OMP SDK 在执行原生子智能体时，通过根事件总线 `subagentEventBus` 发送广播。Nightglide 适配器监听 `task:subagent:event` 信道，将其无损转换为 Nightglide 标准事件：
 
 ```typescript
-export type AgentEvent =
-  | { readonly type: "text_delta"; readonly delta: string }
-  | {
-      readonly type: "tool_start";
-      readonly toolName: string;
-      readonly toolCallId: string;
-      readonly input: Record<string, unknown>;
-    }
-  | {
-      readonly type: "tool_end";
-      readonly toolName: string;
-      readonly toolCallId: string;
-      readonly result?: unknown;
-      readonly error?: string;
-    }
-  | {
-      readonly type: "status";
-      readonly status: AgentStatus;
-      readonly message?: string;
-    }
-  | {
-      readonly type: "error";
-      readonly error: string;
-      readonly code?: string;
-      readonly recoverable?: boolean;
-    }
-  | {
-      readonly type: "done";
-      readonly summary?: string;
-      readonly totalTokens?: number;
-    };
+// OmpAgentSession 核心归一化逻辑
+this.subagentEventBus.on("task:subagent:event", (payload: SubagentEventPayload) => {
+  const { id, event } = payload;
+  switch (event.type) {
+    case "turn_start":
+    case "agent_start":
+      this.emit({
+        type: "subagent_start",
+        subagentId: id,
+        role: subagent.role,
+        model: subagent.model,
+        locality: subagent.locality,
+        task: subagent.task,
+      });
+      break;
+
+    case "message_update":
+      if (event.assistantMessageEvent?.type === "text_delta") {
+        this.emit({
+          type: "subagent_delta",
+          subagentId: id,
+          delta: event.assistantMessageEvent.delta,
+        });
+      }
+      break;
+
+    case "turn_end":
+    case "agent_end":
+      this.emit({
+        type: "subagent_end",
+        subagentId: id,
+        result: "Subagent completed.",
+        totalTokens: event.usage?.totalTokens,
+      });
+      break;
+  }
+});
 ```
-
----
-
-## 5. OMP 上游隔离与安全架构
-
-为了确保宿主环境与 Nightglide 之间的单向安全边界，`OmpAgentEngine` 实施以下技术隔离：
-
-1. **进程与全局状态解耦 (`Settings.isolated`):**
-   - 绝不使用 OMP 的全局设置单例，使用 `Settings.isolated()` 构建单次会话设置视图。
-2. **内存会话管理器 (`SessionManager.inMemory`):**
-   - 会话记录留存在内存生命周期中，严禁在未经用户许可的情况下向宿主历史写入未知 JSONL。
-3. **禁用环境与 MCP 发现:**
-   - 显式传递 `disableExtensionDiscovery: true` 与 `enableMCP: false`，杜绝未授权进程执行或网络探针注入。
-4. **工具严格白名单:**
-   - 传递 `restrictToolNames: true` 与只读工具集 `["read", "find", "grep"]`。
-5. **资源生命周期清理:**
-   - 当终端会话结束或收到退出信号时，强制调用 `session.dispose()`，确保清理底层事件监听与流句柄。
-
----
-
-## 6. 未来多 Agent 协同演进架构 (M3 Preview)
-
-在 M3 阶段，系统将在 `AgentEngine` 之下引入编排器（Multi-Agent Orchestrator），演进为如下拓扑结构：
-
-```mermaid
-flowchart TD
-    MainAgent["Main Agent (总控与任务分发)"]
-    ExploreAgent["Explore Agent (只读代码库探索)"]
-    PlannerAgent["Planner Agent (架构规划与依赖分析)"]
-    CodingAgent["Coding Agent (受限沙箱代码修改)"]
-    ReviewAgent["Review Agent (质量、安全与测试审查)"]
-
-    MainAgent --> ExploreAgent
-    MainAgent --> PlannerAgent
-    PlannerAgent --> CodingAgent
-    CodingAgent --> ReviewAgent
-    ReviewAgent --> MainAgent
-```
-
-- **Main Agent:** 负责与用户交互，分解需求并维护会话总线。
-- **Explore Agent:** 纯只读工作空间检索，建立符号表与依赖拓扑。
-- **Planner Agent:** 生成细粒度执行计划与 Diff 预览。
-- **Coding Agent:** 仅在经过用户确认后，在隔离的工作树（Git Worktree）中执行变更。
-- **Review Agent:** 自动触发单元测试与代码安全静态检查。

@@ -132,4 +132,40 @@ Nightglide 践行纯粹的开源与隐私理念：
    - 用户可断开公网连接验证：Nightglide 在纯离线模式下功能依然完整稳定。
 
 ---
+
+## 6. 提供商物理网络判定与云端授权铁律 (Provider Locality & Cloud Authorization)
+
+在 M1 多模型与多 Provider 架构中，防止代码被静默或意外上传至第三方云端是最高隐私红线：
+
+### 6.1 物理网络位置绝对判定 (Physical Locality Invariance)
+- **拒绝名称伪造:** 任何 Provider 的 Display Name 或配置名称（如有人将远程端点命名为 `"local-proxy"`）**绝对不能作为 Locality 判定依据**。
+- **解析后 IP/Hostname 强制判定 (`resolveEndpointLocality`):**
+  - 回环地址: `127.0.0.1`, `localhost`, `::1`, `[::1]`, `127.0.0.0/8`, `0.0.0.0` 判定为 `local`。
+  - 所有公网域名、外部公网 IP 及局域网非回环地址强制分类为 `remote`。
+
+### 6.2 LOCAL 模式零云端外发守卫
+- 当运行模式为 `LOCAL` 时：
+  - 路由器仅从 `local` 模型池中选派任务；
+  - 任务失败时的 Fallback 回退链中**绝对禁止包含任何 remote 云端模型**；
+  - 若所有本地端点均不可用，系统立即抛出 `ProviderUnavailableError` 显式终止，**绝不允许“好心”降级至 OpenAI/Anthropic**。
+
+### 6.3 请求前硬件级拦截器 (`assertDispatchModel`)
+- 在底层 OMP 请求发送前，Nightglide 注册了不可逆的 `assertDispatchModel` 守卫函数。
+- 每次会话中的任意底层网络请求发出前，拦截器检查目标模型的物理端点与当前授权策略。若处于 `LOCAL` 模式或 `allowCloud: false` 时模型试图调用非本地 Provider，拦截器直接抛出 `RoutingPolicyViolationError`，在协议层物理阻断数据发出。
+
+---
+
+## 7. 跨智能体上下文交接与脱敏规约 (Cross-Agent Context Handoff)
+
+在多 Agent 协同工作流（例如本地 Explorer 与云端 Planner 接力）中：
+
+1. **最小必要上下文原则 (Principle of Least Privilege Context):**
+   - 本地 Explorer 在只读遍历代码库后，仅向上层返回提炼后的结构骨架、关键符号清单与模块调用依赖摘要。
+   - 严禁将整个代码库的原始文件内容打包批量上传至云端。
+2. **凭据预脱敏防泄漏:**
+   - 上下文交接前，自动扫描并抹除代码上下文中的常见 API Key、Token 模式与敏感环境变量。
+3. **可追溯与可撤回:**
+   - 跨 Agent 的每一次上下文交接均产生审计记录并在 TUI 的 `AgentMonitor` 中实时可见，用户可随时按 `Ctrl+C` 立即阻断后续执行链。
+
+---
 *(本文档为 Nightglide 最高安全合规基准，任何破坏上述安全防护特性的代码变更均将被直接否决)*
