@@ -197,7 +197,7 @@ describe("OmpAgentEngine & OmpAgentSession", () => {
     expect(typeof health.ready).toBe("boolean");
     expect(typeof health.message).toBe("string");
     expect(health.details).toBeDefined();
-    expect(health.details?.allowedTools).toEqual(["read", "find", "grep"]);
+    expect(health.details?.allowedTools).toEqual(["read", "find", "grep", "task"]);
   }, 30000);
 
   test("OmpAgentEngine creates isolated session and disposes cleanly", async () => {

@@ -14,9 +14,13 @@ import {
   type AgentEventHandler,
   type SessionState,
   type AgentStatus,
+  type SubagentMonitorItem,
+  type AgentRole,
+  type ProviderLocality,
   EngineError,
   ModelNotConfiguredError,
   SessionDisposedError,
+  RoutingPolicyViolationError,
 } from "@nightglide/core";
 
 export interface OmpAgentEngineOptions {
@@ -28,10 +32,11 @@ export interface OmpAgentEngineOptions {
 }
 
 type OmpSessionInstance = Awaited<ReturnType<typeof createAgentSession>>["session"];
+type OmpEventBus = Awaited<ReturnType<typeof createAgentSession>>["subagentEventBus"];
 
 /**
- * Adapter session wrapping an isolated OMP AgentSession and mapping its internal
- * stream deltas and lifecycle events to standardized @nightglide/core AgentEvents.
+ * Adapter session wrapping an isolated OMP AgentSession, normalizing internal
+ * stream deltas, tool calls, and subagent lifecycle events into standardized @nightglide/core AgentEvents.
  */
 export class OmpAgentSession implements AgentSession {
   readonly id: string;
@@ -39,27 +44,39 @@ export class OmpAgentSession implements AgentSession {
   readonly workspacePath: string;
 
   private readonly ompSession: OmpSessionInstance;
+  private readonly subagentEventBus?: OmpEventBus;
   private status: AgentStatus = "idle";
   private disposed = false;
   private messageHistoryCount = 0;
   private readonly subscribers = new Set<AgentEventHandler>();
   private unsubscribeOmp: (() => void) | null = null;
+  private unsubscribeSubagent: (() => void) | null = null;
+  private readonly subagents = new Map<string, SubagentMonitorItem>();
 
   constructor(
     ompSession: OmpSessionInstance,
     workspacePath: string,
     model: string,
+    subagentEventBus?: OmpEventBus,
     sessionId?: string
   ) {
     this.ompSession = ompSession;
     this.workspacePath = workspacePath;
     this.model = model;
+    this.subagentEventBus = subagentEventBus;
     this.id = sessionId ?? ompSession.sessionManager.getSessionId?.() ?? `omp_session_${Date.now()}`;
 
-    // Subscribe to internal OMP session events and map them to normalized AgentEvents
+    // Subscribe to internal main OMP session events
     this.unsubscribeOmp = this.ompSession.subscribe((event) => {
       this.handleOmpEvent(event);
     });
+
+    // Subscribe to root subagent event bus for native multi-agent observability
+    if (this.subagentEventBus && typeof this.subagentEventBus.on === "function") {
+      this.unsubscribeSubagent = this.subagentEventBus.on("task:subagent:event", (payload: any) => {
+        this.handleSubagentEvent(payload);
+      });
+    }
   }
 
   private emit(event: AgentEvent): void {
@@ -80,7 +97,6 @@ export class OmpAgentSession implements AgentSession {
 
   /**
    * Normalizes an OMP internal session event into Nightglide's typed AgentEvents.
-   * Public for testing event normalization in isolation.
    */
   handleOmpEvent(event: any): void {
     if (this.disposed || !event) return;
@@ -164,11 +180,13 @@ export class OmpAgentSession implements AgentSession {
         break;
       }
 
-      case "agent_end": {
+      case "agent_end":
+      case "turn_end": {
         this.setStatus("completed");
         this.emit({
           type: "done",
-          summary: "Agent turn completed successfully.",
+          summary: "OMP turn finished.",
+          totalTokens: event.usage?.totalTokens,
         });
         this.setStatus("idle");
         break;
@@ -184,18 +202,8 @@ export class OmpAgentSession implements AgentSession {
           this.setStatus("error");
           this.emit({
             type: "error",
-            error: event.finalError ?? "Auto-retry failed",
+            error: event.finalError ?? "Auto retry failed",
             recoverable: false,
-          });
-        }
-        break;
-      }
-
-      case "notice": {
-        if (event.level === "error") {
-          this.emit({
-            type: "error",
-            error: event.message,
           });
         }
         break;
@@ -203,26 +211,90 @@ export class OmpAgentSession implements AgentSession {
     }
   }
 
+  /**
+   * Normalizes raw subagent events from OMP's subagentEventBus into Nightglide subagent events.
+   */
+  handleSubagentEvent(payload: any): void {
+    if (this.disposed || !payload || !payload.id || !payload.event) return;
+
+    const subagentId = String(payload.id);
+    const innerEvent = payload.event;
+    const subItem = this.subagents.get(subagentId) ?? {
+      id: subagentId,
+      role: "scout" as AgentRole,
+      model: "omp-subagent",
+      providerId: "omp",
+      locality: "local" as ProviderLocality,
+      task: "Delegated subagent task",
+      status: "thinking" as AgentStatus,
+      startedAt: Date.now(),
+    };
+
+    switch (innerEvent.type) {
+      case "agent_start":
+      case "turn_start": {
+        this.subagents.set(subagentId, { ...subItem, status: "thinking" });
+        this.emit({
+          type: "subagent_start",
+          subagentId,
+          role: subItem.role,
+          model: subItem.model,
+          providerId: subItem.providerId,
+          locality: subItem.locality,
+          task: subItem.task,
+        });
+        break;
+      }
+
+      case "message_update": {
+        const assistantEvt = innerEvent.assistantMessageEvent;
+        if (assistantEvt && assistantEvt.type === "text_delta" && assistantEvt.delta) {
+          this.subagents.set(subagentId, { ...subItem, status: "streaming" });
+          this.emit({
+            type: "subagent_delta",
+            subagentId,
+            delta: assistantEvt.delta,
+          });
+        }
+        break;
+      }
+
+      case "agent_end":
+      case "turn_end": {
+        const ended: SubagentMonitorItem = {
+          ...subItem,
+          status: "completed",
+          totalTokens: innerEvent.usage?.totalTokens,
+          endedAt: Date.now(),
+        };
+        this.subagents.set(subagentId, ended);
+        this.emit({
+          type: "subagent_end",
+          subagentId,
+          result: "Subagent completed.",
+          totalTokens: innerEvent.usage?.totalTokens,
+        });
+        break;
+      }
+    }
+  }
+
   async sendMessage(prompt: string): Promise<void> {
     if (this.disposed || Boolean(this.ompSession.isDisposed)) {
-      throw new SessionDisposedError("Cannot send message to a disposed OMP session.");
+      throw new SessionDisposedError("Cannot send message to a disposed OmpAgentSession.");
     }
 
     this.messageHistoryCount++;
-    this.setStatus("thinking");
-
     try {
       await this.ompSession.prompt(prompt);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
-      this.setStatus("error");
-      this.emit({
-        type: "error",
-        error: message,
-      });
-
-      const lower = message.toLowerCase();
-      if (lower.includes("no model") || lower.includes("api key")) {
+      if (
+        message.includes("No model configured") ||
+        message.includes("No model selected") ||
+        message.includes("Could not resolve model") ||
+        message.includes("Model not found")
+      ) {
         throw new ModelNotConfiguredError(message);
       }
       throw new EngineError(message);
@@ -237,42 +309,41 @@ export class OmpAgentSession implements AgentSession {
   }
 
   async cancel(): Promise<void> {
-    if (this.disposed || Boolean(this.ompSession.isDisposed)) {
-      return;
-    }
-
+    if (this.disposed || Boolean(this.ompSession.isDisposed)) return;
     this.setStatus("cancelling");
     try {
       await this.ompSession.abort();
     } catch {
-      // Abort may be a no-op if session is already idle
+      // Abort is safe no-op if session already idle
     } finally {
       this.setStatus("idle");
     }
   }
 
   async dispose(): Promise<void> {
-    if (this.disposed) {
-      return;
-    }
-
+    if (this.disposed) return;
     this.disposed = true;
+
     if (this.unsubscribeOmp) {
       try {
         this.unsubscribeOmp();
-      } catch {
-        // Safe disposal
-      }
+      } catch {}
       this.unsubscribeOmp = null;
     }
+
+    if (this.unsubscribeSubagent) {
+      try {
+        this.unsubscribeSubagent();
+      } catch {}
+      this.unsubscribeSubagent = null;
+    }
+
     this.subscribers.clear();
     this.status = "idle";
 
     try {
       await this.ompSession.dispose();
-    } catch {
-      // Safe disposal
-    }
+    } catch {}
   }
 
   getState(): SessionState {
@@ -284,13 +355,15 @@ export class OmpAgentSession implements AgentSession {
       workspacePath: this.workspacePath,
       messageHistoryCount: this.ompSession.state?.messages?.length ?? this.messageHistoryCount,
       isDisposed: this.disposed || isUnderlyingDisposed,
+      activeSubagents: Array.from(this.subagents.values()),
     };
   }
 }
 
 /**
  * Production AgentEngine implementation backed by Oh-My-Pi (OMP).
- * Enforces strict memory isolation, disabled extensions/MCP/LSP, and tool whitelisting.
+ * Features native subagent delegation via `task`, strict privacy enforcement via `assertDispatchModel`,
+ * and dynamic role-based model overrides.
  */
 export class OmpAgentEngine implements AgentEngine {
   readonly id = "omp-adapter";
@@ -304,18 +377,64 @@ export class OmpAgentEngine implements AgentEngine {
       this.options.defaultAgentDir ??
       path.join(os.tmpdir(), "nightglide-omp-isolated");
 
+    const settings = Settings.isolated();
+
+    // Configure role-based model mappings in OMP settings
+    if (options.roleModelOverrides) {
+      const overrides: Record<string, string> = {};
+      for (const [role, modelSelector] of Object.entries(options.roleModelOverrides)) {
+        if (modelSelector && typeof modelSelector === "string") {
+          settings.setModelRole(role, modelSelector);
+          overrides[role] = modelSelector;
+        }
+      }
+      try {
+        settings.overrideModelRoles(overrides);
+      } catch {
+        // Safe fallback
+      }
+    }
+
+    // Strict privacy model assertion guard: called before any model request on wire
+    const assertDispatchModel = (model: any) => {
+      const isLocalMode = options.routingMode === "LOCAL";
+      const isCloudBlocked = !options.allowCloud;
+
+      if (isLocalMode || isCloudBlocked) {
+        const providerName = String(model?.provider || "").toLowerCase();
+        const modelId = String(model?.id || "").toLowerCase();
+        const isLocalProvider =
+          providerName === "local" ||
+          providerName === "omlx" ||
+          providerName === "ollama" ||
+          modelId.startsWith("omlx/") ||
+          modelId.startsWith("local/");
+
+        if (!isLocalProvider) {
+          throw new RoutingPolicyViolationError(
+            `Strict privacy policy violation: model '${model?.id}' (${model?.provider}) attempted unauthorized cloud transmission while in ${options.routingMode || "LOCAL"} mode.`
+          );
+        }
+      }
+    };
+
+    const allowedTools = options.readOnly
+      ? ["read", "find", "grep", "task"]
+      : ["read", "find", "grep", "task", "write", "edit", "bash"];
+
     const sessionResult = await createAgentSession({
       cwd: options.workspacePath,
       agentDir,
       sessionManager: SessionManager.inMemory(),
-      settings: Settings.isolated(),
+      settings,
       disableExtensionDiscovery: true,
       enableMCP: false,
       enableLsp: false,
       restrictToolNames: true,
-      toolNames: ["read", "find", "grep"],
+      toolNames: allowedTools,
       modelPattern: options.model ?? this.options.model ?? this.options.defaultModel,
       systemPrompt: options.systemPrompt,
+      assertDispatchModel,
     });
 
     const resolvedModel =
@@ -328,7 +447,8 @@ export class OmpAgentEngine implements AgentEngine {
     return new OmpAgentSession(
       sessionResult.session,
       options.workspacePath,
-      resolvedModel
+      resolvedModel,
+      sessionResult.subagentEventBus
     );
   }
 
@@ -345,7 +465,7 @@ export class OmpAgentEngine implements AgentEngine {
         enableMCP: false,
         enableLsp: false,
         restrictToolNames: true,
-        toolNames: ["read", "find", "grep"],
+        toolNames: ["read", "find", "grep", "task"],
       });
 
       try {
@@ -357,8 +477,8 @@ export class OmpAgentEngine implements AgentEngine {
         const availableModels = probeResult.session.modelRegistry.getAvailable();
         const ready = hasAuth && availableModels.length > 0;
         const message = ready
-          ? `OMP runtime operational. ${availableModels.length} models authenticated and ready.`
-          : "OMP runtime initialized, but no authenticated providers or API keys configured.";
+          ? `OMP runtime operational. ${availableModels.length} models authenticated, native task delegation ready.`
+          : "OMP runtime initialized, native task delegation enabled, but no authenticated providers or API keys configured.";
 
         return {
           ready,
@@ -368,8 +488,8 @@ export class OmpAgentEngine implements AgentEngine {
           details: {
             availableModelsCount: availableModels.length,
             hasConcreteAuth: hasAuth,
-            toolsRestricted: true,
-            allowedTools: ["read", "find", "grep"],
+            taskToolEnabled: true,
+            allowedTools: ["read", "find", "grep", "task"],
           },
         };
       } finally {
