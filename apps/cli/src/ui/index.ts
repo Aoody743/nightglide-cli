@@ -10,5 +10,6 @@ export * from "./screens/SetupScreen.js";
 export * from "./screens/ChatScreen.js";
 export * from "./screens/ModelAssignmentView.js";
 export * from "./dimensions.js";
+export * from "./metaphors/index.js";
 export * from "./App.js";
 export { default as App } from "./App.js";

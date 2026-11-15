@@ -22,10 +22,16 @@ export interface ThemeColors {
 
 export type ThemeType = "dark" | "light";
 
+export type UIMetaphor = "flight-deck" | "abyss-dive";
+
 export interface Theme {
   readonly id: string;
   readonly name: string;
   readonly type: ThemeType;
   readonly description: string;
   readonly colors: ThemeColors;
+  readonly metaphor?: UIMetaphor;
+  readonly sonarPing?: string;
+  readonly depthGauge?: string;
+  readonly hullBorder?: string;
 }

@@ -26,6 +26,16 @@ import {
 } from "@nightglide/core";
 import type { ProviderRegistry } from "@nightglide/providers";
 
+/**
+ * Standard directive injecting multi-model boundary awareness and local co-pilot delegation rules.
+ */
+export const LOCAL_COPILOT_DELEGATION_DIRECTIVE = `## Multi-Model Architecture & Local Co-Pilot
+You are operating within Nightglide's tiered multi-model environment.
+An on-device Local Model (such as oMLX / Ollama / Endless) is running locally on the user's machine.
+- Local Model Boundaries: Excellent for fast conversational replies, local file exploration, and small, localized code edits without network latency.
+- Lead Model Responsibilities: You are responsible for complex multi-file architectural changes, deep algorithmic problem solving, critical security audits, and comprehensive test suite validation.
+- Delegation: For lightweight, targeted sub-tasks, you may delegate or reference local tool executions seamlessly.`;
+
 export interface OmpAgentEngineOptions {
   defaultWorkspacePath?: string;
   defaultAgentDir?: string;
@@ -128,6 +138,7 @@ export class OmpAgentSession implements AgentSession {
   readonly model: string;
   readonly workspacePath: string;
   readonly readOnly: boolean;
+  readonly systemPrompt?: string;
 
   private readonly ompSession: OmpSessionInstance;
   private readonly subagentEventBus?: OmpEventBus;
@@ -153,7 +164,8 @@ export class OmpAgentSession implements AgentSession {
     subagentEventBus?: OmpEventBus,
     sessionId?: string,
     readOnly = false,
-    sessionOptions?: CreateSessionOptions
+    sessionOptions?: CreateSessionOptions,
+    systemPrompt?: string
   ) {
     this.ompSession = ompSession;
     this.workspacePath = workspacePath;
@@ -161,6 +173,7 @@ export class OmpAgentSession implements AgentSession {
     this.subagentEventBus = subagentEventBus;
     this.readOnly = readOnly;
     this.sessionOptions = sessionOptions ?? { workspacePath, readOnly };
+    this.systemPrompt = systemPrompt ?? this.sessionOptions.systemPrompt;
     this.id = sessionId ?? ompSession.sessionManager.getSessionId?.() ?? `omp_session_${Date.now()}`;
 
     // Subscribe to internal main OMP session events
@@ -829,6 +842,13 @@ export class OmpAgentEngine implements AgentEngine {
       }
     }
 
+    const userPrompt = options.systemPrompt?.trim();
+    const systemPrompt = userPrompt
+      ? (userPrompt.includes("## Multi-Model Architecture & Local Co-Pilot")
+          ? userPrompt
+          : `${userPrompt}\n\n${LOCAL_COPILOT_DELEGATION_DIRECTIVE}`)
+      : LOCAL_COPILOT_DELEGATION_DIRECTIVE;
+
     const sessionOptions: Parameters<typeof createAgentSession>[0] = {
       cwd: options.workspacePath,
       agentDir,
@@ -838,7 +858,7 @@ export class OmpAgentEngine implements AgentEngine {
       enableMCP: false,
       enableLsp: false,
       modelPattern: options.model ?? this.options.model ?? this.options.defaultModel,
-      systemPrompt: options.systemPrompt,
+      systemPrompt,
     };
 
     // If readOnly is explicitly opt-in true, restrict to native read-only tools
@@ -894,7 +914,11 @@ export class OmpAgentEngine implements AgentEngine {
       sessionResult.subagentEventBus,
       undefined,
       Boolean(options.readOnly),
-      options
+      {
+        ...options,
+        systemPrompt,
+      },
+      systemPrompt
     );
 
     const uiContext = {

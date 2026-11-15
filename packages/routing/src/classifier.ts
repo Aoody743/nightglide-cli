@@ -55,10 +55,10 @@ const RULES: PatternRule[] = [
   {
     category: "explain",
     patterns: [
-      /\b(explain|what does|how does|clarify|understand|describe|meaning|walk through|break down)\b/i,
-      /(解释|说明|介绍|为什么|怎么理解|含义|讲解|导读)/i,
+      /\b(explain|what does|how does|clarify|understand|describe|meaning|walk through|break down|hello|hi|hey|greetings|how are you|who are you|chat|conversation|talk)\b/i,
+      /(解释|说明|介绍|为什么|怎么理解|含义|讲解|导读|你好|您好|打招呼|早安|晚上好|你是谁|聊聊|闲聊)/i,
     ],
-    capabilities: ["reasoning"],
+    capabilities: ["reasoning", "fast"],
     weight: 1.0,
   },
   {
@@ -91,8 +91,8 @@ const RULES: PatternRule[] = [
   {
     category: "implement",
     patterns: [
-      /\b(implement|write|create|build|add feature|code|generate|develop|fix|patch)\b/i,
-      /(实现|编写|写代码|创建|开发|修改|修复|添加功能|补丁)/i,
+      /\b(implement|write|create|build|add feature|code|generate|develop|fix|patch|edit|modify|update|change|tweak)\b/i,
+      /(实现|编写|写代码|创建|开发|修改|修复|添加功能|补丁|调整|改动)/i,
     ],
     capabilities: ["coding", "reasoning"],
     weight: 1.0,
@@ -100,8 +100,13 @@ const RULES: PatternRule[] = [
 ];
 
 const COMPLEXITY_INDICATORS = [
-  /\b(refactor\w*|architect\w*|complete overhaul|full migration|distributed|concurrency|scalable|high throughput)\b/i,
-  /(重构|大规模|系统级|多模块|高并发|跨服务|架构|分布式|高吞吐)/i,
+  /\b(multi-file|multiple files|multi file|cross-file|refactor\w*|architect\w*|complete overhaul|full migration|distributed|concurrency|scalable|high throughput)\b/i,
+  /(多文件|跨文件|重构|大规模|系统级|多模块|高并发|跨服务|架构|分布式|高吞吐)/i,
+];
+
+const LIGHTWEIGHT_INDICATORS = [
+  /\b(small edit|quick edit|minor edit|localized edit|small diff|quick fix|minor change|small tweak|minor tweak|typo|fix typo|single file|one file|single function|rename variable)\b/i,
+  /(小修改|轻量修改|微调|小改动|单文件|快速修复|简单修改|修复拼写|改个变量名)/i,
 ];
 
 /**
@@ -157,17 +162,38 @@ export function classifyTask(
   }
 
   // Calculate complexity
-  let isComplex = false;
-  if (cleanPrompt.length > 300) {
-    isComplex = true;
-  }
-  if ((context?.filesCount ?? 0) > 10 || context?.isMultiStep) {
-    isComplex = true;
-  }
+  let hasComplexityIndicator = false;
   for (const pat of COMPLEXITY_INDICATORS) {
     if (pat.test(cleanPrompt)) {
-      isComplex = true;
+      hasComplexityIndicator = true;
       break;
+    }
+  }
+
+  let isLightweight = false;
+  for (const pat of LIGHTWEIGHT_INDICATORS) {
+    if (pat.test(cleanPrompt)) {
+      isLightweight = true;
+      break;
+    }
+  }
+
+  const isMultiFileOrSystem =
+    /\b(multi-file|multiple files|multi file|cross-file|distributed|concurrency|system-wide|complete overhaul|full migration)\b/i.test(cleanPrompt) ||
+    /(多文件|跨文件|跨服务|分布式|系统级|大规模)/i.test(cleanPrompt);
+
+  let isComplex = false;
+  if (isLightweight && !isMultiFileOrSystem && (context?.filesCount ?? 0) <= 10 && !context?.isMultiStep) {
+    isComplex = false;
+  } else {
+    if (cleanPrompt.length > 300) {
+      isComplex = true;
+    }
+    if ((context?.filesCount ?? 0) > 10 || context?.isMultiStep) {
+      isComplex = true;
+    }
+    if (hasComplexityIndicator) {
+      isComplex = true;
     }
   }
 

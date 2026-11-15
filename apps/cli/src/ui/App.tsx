@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, Component, type ReactNode } from "react";
-import { getThemeManager, type Theme } from "@nightglide/themes";
+import { getThemeManager, type Theme, type UIMetaphor } from "@nightglide/themes";
 import type { AgentEngine } from "@nightglide/core";
 import { loadConfig, saveConfig, type InteractionMode } from "@nightglide/config";
 import { useKeyboard } from "@opentui/react";
@@ -19,6 +19,8 @@ export interface AppProps {
   workspacePath?: string;
   dimensions?: { width: number; height: number };
   initialInteractionMode?: InteractionMode;
+  initialMetaphor?: UIMetaphor;
+  metaphor?: UIMetaphor;
 }
 
 /**
@@ -77,12 +79,17 @@ export function App({
   workspacePath = process.cwd(),
   dimensions: overrideDimensions,
   initialInteractionMode,
+  initialMetaphor,
+  metaphor: propMetaphor,
 }: AppProps) {
   const themeManager = getThemeManager();
   const [theme, setTheme] = useState<Theme>(() => themeManager.getActiveTheme());
   const [activeScreen, setActiveScreen] = useState<ScreenId>(initialScreen);
   const [interactionMode, setInteractionMode] = useState<InteractionMode>(
     initialInteractionMode ?? "guided"
+  );
+  const [metaphor, setMetaphor] = useState<UIMetaphor>(
+    () => propMetaphor ?? initialMetaphor ?? theme.metaphor ?? "flight-deck"
   );
 
   // Responsive dimensions with fallback for 80x24, 100x30, 120x36
@@ -101,10 +108,13 @@ export function App({
     }
   }, [initialInteractionMode]);
 
-  // Subscribe to global theme changes
+  // Subscribe to global theme changes and sync metaphor
   useEffect(() => {
     const unsubscribe = themeManager.subscribe((updatedTheme) => {
       setTheme(updatedTheme);
+      if (updatedTheme.metaphor) {
+        setMetaphor(updatedTheme.metaphor);
+      }
     });
     return unsubscribe;
   }, [themeManager]);
@@ -123,6 +133,10 @@ export function App({
       process.exit(0);
     }
   }, [onExit]);
+
+  const handleToggleMetaphor = useCallback(() => {
+    setMetaphor((prev) => (prev === "flight-deck" ? "abyss-dive" : "flight-deck"));
+  }, []);
 
   const handleToggleInteractionMode = useCallback(() => {
     setInteractionMode((prev) => {
@@ -150,6 +164,12 @@ export function App({
     // Universal safe exit with Ctrl+C or Ctrl+Q
     if (key.ctrl && (key.name === "c" || key.name === "q")) {
       handleExit();
+      return;
+    }
+
+    // Universal Metaphor Toggle (Ctrl+U: Flight Deck <-> Abyss Dive)
+    if (key.ctrl && (key.name === "u" || key.name === "U")) {
+      handleToggleMetaphor();
       return;
     }
 
@@ -246,13 +266,14 @@ export function App({
         height="100%"
         backgroundColor={theme.colors.background}
       >
-        {/* Celestial Header */}
+        {/* Celestial or Abyss Header */}
         <Header
           activeScreen={activeScreen}
           theme={theme}
           model="qwen2.5-coder:7b"
           isMock={engine?.isMock ?? false}
           dimensions={dimensions}
+          metaphor={metaphor}
         />
 
         {/* Main View Area */}

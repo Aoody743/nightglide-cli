@@ -160,6 +160,7 @@ export interface AgentSession {
   readonly id: string;
   readonly model: string;
   readonly workspacePath: string;
+  readonly systemPrompt?: string;
 
   sendMessage(prompt: string): Promise<void>;
   subscribe(handler: AgentEventHandler): () => void;

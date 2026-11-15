@@ -9,6 +9,7 @@
   },
   "dependencies": {
     "@nightglide/core": "workspace:*",
-    "@nightglide/config": "workspace:*"
+    "@nightglide/config": "workspace:*",
+    "@oh-my-pi/pi-coding-agent": "18.20.2"
   }
 }

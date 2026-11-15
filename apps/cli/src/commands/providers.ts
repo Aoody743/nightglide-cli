@@ -1,9 +1,10 @@
 import { loadConfig } from "@nightglide/config";
-import { ProviderRegistry } from "@nightglide/providers";
+import { ProviderRegistry, OmpAuthAdapter } from "@nightglide/providers";
 
 export async function runProvidersCommand(): Promise<void> {
   const config = await loadConfig();
   const registry = new ProviderRegistry();
+  const authAdapter = new OmpAuthAdapter();
 
   for (const [id, pConfig] of Object.entries(config.providers)) {
     try {
@@ -25,9 +26,21 @@ export async function runProvidersCommand(): Promise<void> {
   }
 
   for (const p of providers) {
-    const hasAuth = Boolean(registry.resolveApiKey(p.id));
+    const authType = await authAdapter.getProviderAuthType(p.id);
+    const hasRegistryKey = Boolean(registry.resolveApiKey(p.id));
+
+    let authStatus: string;
+    if (authType === "official_subscription") {
+      authStatus = "\x1b[1;32m[SUBSCRIPTION ACTIVE] 官方订阅已就绪\x1b[0m";
+    } else if (authType === "custom_api_key" || hasRegistryKey) {
+      authStatus = "\x1b[1;36m[API KEY CONFIGURED] 自定义密钥已配置\x1b[0m";
+    } else if (p.locality === "local") {
+      authStatus = "\x1b[1;32m[LOCAL (ZERO-COST)] 本地端点 (无需认证)\x1b[0m";
+    } else {
+      authStatus = `\x1b[1;33m[NOT AUTHENTICATED] 未认证 (请运行: nightglide login ${p.id})\x1b[0m`;
+    }
+
     const localityTag = p.locality === "local" ? "\x1b[32m[LOCAL]\x1b[0m" : "\x1b[36m[CLOUD]\x1b[0m";
-    const authStatus = hasAuth ? "\x1b[32m已认证 (API Key 就绪)\x1b[0m" : "\x1b[33m未配置密钥 (需要认证)\x1b[0m";
 
     console.log(`• 提供商 ID: \x1b[1m${p.id}\x1b[0m ${localityTag}`);
     console.log(`  显示名称: ${p.name}`);

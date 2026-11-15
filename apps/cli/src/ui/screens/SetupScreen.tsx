@@ -1,13 +1,82 @@
 import React from "react";
 import type { Theme } from "@nightglide/themes";
 import type { ScreenId } from "../components/Header.js";
+import type { ProviderAuthType } from "@nightglide/providers";
 
 export interface SetupScreenProps {
   theme: Theme;
   onNavigate: (screen: ScreenId) => void;
+  authStatuses?: Record<string, ProviderAuthType>;
 }
 
-export function SetupScreen({ theme, onNavigate }: SetupScreenProps) {
+export function SetupScreen({ theme, onNavigate, authStatuses }: SetupScreenProps) {
+  const statuses: Record<string, ProviderAuthType> = {
+    "openai-codex": authStatuses?.["openai-codex"] ?? "unauthenticated",
+    "github-copilot": authStatuses?.["github-copilot"] ?? "unauthenticated",
+    anthropic:
+      authStatuses?.anthropic ??
+      (process.env.ANTHROPIC_API_KEY ? "custom_api_key" : "unauthenticated"),
+    openai:
+      authStatuses?.openai ??
+      (process.env.OPENAI_API_KEY ? "custom_api_key" : "unauthenticated"),
+    deepseek:
+      authStatuses?.deepseek ??
+      (process.env.DEEPSEEK_API_KEY ? "custom_api_key" : "unauthenticated"),
+    siliconflow:
+      authStatuses?.siliconflow ??
+      (process.env.SILICONFLOW_API_KEY ? "custom_api_key" : "unauthenticated"),
+    omlx: authStatuses?.omlx ?? "unauthenticated",
+  };
+
+  const renderBadge = (type: ProviderAuthType | "local_zero_cost") => {
+    if (type === "official_subscription") {
+      return (
+        <box
+          paddingX={1}
+          backgroundColor={theme.colors.surfaceElevated}
+          borderColor={theme.colors.success}
+          borderStyle="single"
+        >
+          <text fg={theme.colors.success}>● SUBSCRIPTION ACTIVE</text>
+        </box>
+      );
+    }
+    if (type === "custom_api_key") {
+      return (
+        <box
+          paddingX={1}
+          backgroundColor={theme.colors.surfaceElevated}
+          borderColor={theme.colors.accent}
+          borderStyle="single"
+        >
+          <text fg={theme.colors.accent}>● API KEY CONFIGURED</text>
+        </box>
+      );
+    }
+    if (type === "local_zero_cost") {
+      return (
+        <box
+          paddingX={1}
+          backgroundColor={theme.colors.surfaceElevated}
+          borderColor={theme.colors.accentSecondary}
+          borderStyle="single"
+        >
+          <text fg={theme.colors.accentSecondary}>● LOCAL (ZERO-COST)</text>
+        </box>
+      );
+    }
+    return (
+      <box
+        paddingX={1}
+        backgroundColor={theme.colors.surfaceElevated}
+        borderColor={theme.colors.border}
+        borderStyle="single"
+      >
+        <text fg={theme.colors.textMuted}>○ NOT AUTHENTICATED</text>
+      </box>
+    );
+  };
+
   return (
     <box
       flexDirection="column"
@@ -18,7 +87,7 @@ export function SetupScreen({ theme, onNavigate }: SetupScreenProps) {
       paddingY={1}
       gap={1}
     >
-      {/* Title */}
+      {/* Title Header */}
       <box
         flexDirection="row"
         justifyContent="space-between"
@@ -28,10 +97,10 @@ export function SetupScreen({ theme, onNavigate }: SetupScreenProps) {
       >
         <box flexDirection="column">
           <text fg={theme.colors.accent}>
-            ✦ NIGHTGLIDE PROVIDER & CREDENTIAL CONFIGURATION
+            ✦ NIGHTGLIDE DUAL AUTHENTICATION & CREDENTIAL CONFIGURATION
           </text>
           <text fg={theme.colors.textMuted}>
-            Beginner-friendly guide to Local vs Cloud AI setups and safe credential management.
+            Select between Official Subscription Login and Custom API Key Provider methods.
           </text>
         </box>
         <box flexDirection="row" gap={1}>
@@ -41,91 +110,167 @@ export function SetupScreen({ theme, onNavigate }: SetupScreenProps) {
         </box>
       </box>
 
-      {/* Two Column Grid: Local vs Cloud */}
+      {/* Dual Authentication Choices: Two Column Grid */}
       <box flexDirection="row" gap={2} width="100%">
-        {/* Local Providers */}
+        {/* Choice 1: Official Subscription Login */}
         <box
           flexDirection="column"
           flexGrow={1}
           backgroundColor={theme.colors.surface}
-          borderColor={theme.colors.accentSecondary}
+          borderColor={theme.colors.success}
           borderStyle="single"
           paddingX={2}
           paddingY={1}
           gap={1}
         >
-          <text fg={theme.colors.accentSecondary}>
-            ◈ 1. LOCAL INTELLIGENCE (Recommended / Zero-Cost)
+          <text fg={theme.colors.success}>
+            [1] 官方订阅登录 / Official Subscription Login
           </text>
-          <text fg={theme.colors.textPrimary}>
-            Nightglide is designed as a first-class local AI coding agent on Apple Silicon.
+          <text fg={theme.colors.textSecondary}>
+            Use your active consumer/pro subscriptions without extra per-token API charges.
           </text>
-          <box flexDirection="column">
-            <text fg={theme.colors.success}>✔ 100% Private:</text>
-            <text fg={theme.colors.textSecondary}>
-              Code never leaves your Mac. Fully offline capable.
+
+          {/* Subscription Provider 1: Codex */}
+          <box
+            flexDirection="column"
+            paddingX={1}
+            paddingY={1}
+            backgroundColor={theme.colors.surfaceElevated}
+            borderColor={theme.colors.border}
+            gap={1}
+          >
+            <box flexDirection="row" justifyContent="space-between" alignItems="center">
+              <text fg={theme.colors.textPrimary}>• OpenAI Codex (ChatGPT Plus / Pro)</text>
+              {renderBadge(statuses["openai-codex"] ?? "unauthenticated")}
+            </box>
+            <text fg={theme.colors.textMuted}>
+              Login: "nightglide login codex" (OAuth browser verification)
             </text>
-            <text fg={theme.colors.success}>✔ Zero API Costs:</text>
-            <text fg={theme.colors.textSecondary}>
-              No credit card or monthly subscription required.
+          </box>
+
+          {/* Subscription Provider 2: GitHub Copilot */}
+          <box
+            flexDirection="column"
+            paddingX={1}
+            paddingY={1}
+            backgroundColor={theme.colors.surfaceElevated}
+            borderColor={theme.colors.border}
+            gap={1}
+          >
+            <box flexDirection="row" justifyContent="space-between" alignItems="center">
+              <text fg={theme.colors.textPrimary}>• GitHub Copilot</text>
+              {renderBadge(statuses["github-copilot"] ?? "unauthenticated")}
+            </box>
+            <text fg={theme.colors.textMuted}>
+              Login: "nightglide login copilot" (GitHub device authorization)
             </text>
-            <text fg={theme.colors.success}>✔ Supported Local Engines:</text>
-            <text fg={theme.colors.textSecondary}>
-              • Ollama (http://localhost:11434)
-            </text>
-            <text fg={theme.colors.textSecondary}>
-              • oMLX (Apple Silicon MLX unified memory)
-            </text>
-            <text fg={theme.colors.textSecondary}>
-              • Recommended: qwen2.5-coder:7b-instruct
+          </box>
+
+          {/* Subscription Provider 3: Claude CLI Token */}
+          <box
+            flexDirection="column"
+            paddingX={1}
+            paddingY={1}
+            backgroundColor={theme.colors.surfaceElevated}
+            borderColor={theme.colors.border}
+            gap={1}
+          >
+            <box flexDirection="row" justifyContent="space-between" alignItems="center">
+              <text fg={theme.colors.textPrimary}>• Claude CLI Token / Anthropic Subscription</text>
+              {renderBadge(
+                statuses.anthropic === "official_subscription"
+                  ? "official_subscription"
+                  : "unauthenticated"
+              )}
+            </box>
+            <text fg={theme.colors.textMuted}>
+              Login: "nightglide login claude" (Anthropic token adoption)
             </text>
           </box>
         </box>
 
-        {/* Cloud Providers */}
+        {/* Choice 2: Custom API Key Provider */}
         <box
           flexDirection="column"
           flexGrow={1}
           backgroundColor={theme.colors.surface}
-          borderColor={theme.colors.border}
+          borderColor={theme.colors.accent}
           borderStyle="single"
           paddingX={2}
           paddingY={1}
           gap={1}
         >
           <text fg={theme.colors.accent}>
-            ◈ 2. CLOUD INFERENCE PROVIDERS
+            [2] 第三方 API Key / Custom Provider
           </text>
-          <text fg={theme.colors.textPrimary}>
-            For large-scale repository refactoring and maximum frontier reasoning:
+          <text fg={theme.colors.textSecondary}>
+            Bring your own API key for frontier cloud models or connect zero-cost local LLMs.
           </text>
-          <box flexDirection="column">
-            <text fg={theme.colors.textSecondary}>
-              • Anthropic Claude 3.5 Sonnet / Haiku
-            </text>
-            <text fg={theme.colors.textSecondary}>
-              • OpenAI GPT-4o / GPT-4o-mini
-            </text>
-            <text fg={theme.colors.textSecondary}>
-              • DeepSeek V3 / R1 (via OpenRouter or direct)
-            </text>
-            <text fg={theme.colors.textSecondary}>
-              • Google Gemini 2.0 Flash / Pro
-            </text>
-          </box>
+
+          {/* Custom Provider 1: OpenAI */}
           <box
+            flexDirection="column"
             paddingX={1}
+            paddingY={1}
             backgroundColor={theme.colors.surfaceElevated}
             borderColor={theme.colors.border}
+            gap={1}
           >
+            <box flexDirection="row" justifyContent="space-between" alignItems="center">
+              <text fg={theme.colors.textPrimary}>• OpenAI (GPT-4o, o3-mini)</text>
+              {renderBadge(
+                statuses.openai === "custom_api_key" ? "custom_api_key" : "unauthenticated"
+              )}
+            </box>
             <text fg={theme.colors.textMuted}>
-              Tip: Switch between Local and Cloud in seconds with no vendor lock-in.
+              Key: "nightglide login openai --key sk-..." or export OPENAI_API_KEY
+            </text>
+          </box>
+
+          {/* Custom Provider 2: DeepSeek & SiliconFlow */}
+          <box
+            flexDirection="column"
+            paddingX={1}
+            paddingY={1}
+            backgroundColor={theme.colors.surfaceElevated}
+            borderColor={theme.colors.border}
+            gap={1}
+          >
+            <box flexDirection="row" justifyContent="space-between" alignItems="center">
+              <text fg={theme.colors.textPrimary}>• DeepSeek & SiliconFlow (V3 / R1)</text>
+              {renderBadge(
+                statuses.deepseek === "custom_api_key" ||
+                  statuses.siliconflow === "custom_api_key"
+                  ? "custom_api_key"
+                  : "unauthenticated"
+              )}
+            </box>
+            <text fg={theme.colors.textMuted}>
+              Key: export DEEPSEEK_API_KEY="..." / SILICONFLOW_API_KEY="..."
+            </text>
+          </box>
+
+          {/* Custom Provider 3: Local oMLX / Ollama */}
+          <box
+            flexDirection="column"
+            paddingX={1}
+            paddingY={1}
+            backgroundColor={theme.colors.surfaceElevated}
+            borderColor={theme.colors.border}
+            gap={1}
+          >
+            <box flexDirection="row" justifyContent="space-between" alignItems="center">
+              <text fg={theme.colors.textPrimary}>• Local oMLX & Ollama (Apple Silicon)</text>
+              {renderBadge("local_zero_cost")}
+            </box>
+            <text fg={theme.colors.textMuted}>
+              Zero-cost & 100% private. Runs offline on Mac (http://localhost:11434).
             </text>
           </box>
         </box>
       </box>
 
-      {/* Safe Credentials & Diagnostics */}
+      {/* Safe Credentials & Navigation Footer */}
       <box
         flexDirection="column"
         backgroundColor={theme.colors.surface}
@@ -135,27 +280,20 @@ export function SetupScreen({ theme, onNavigate }: SetupScreenProps) {
         paddingY={1}
         gap={1}
       >
-        <text fg={theme.colors.warning}>
-          🔒 SAFE CREDENTIAL MANAGEMENT
-        </text>
-        <text fg={theme.colors.textSecondary}>
-          Nightglide saves configuration to ~/.nightglide/config.json with strict file permissions (0600).
-        </text>
-        <text fg={theme.colors.textSecondary}>
-          You can also set environment variables in your shell profile (.zshrc / .bashrc):
-        </text>
-        <box
-          paddingX={1}
-          backgroundColor={theme.colors.surfaceElevated}
-          borderColor={theme.colors.border}
-        >
-          <text fg={theme.colors.accent}>
-            export OPENAI_API_KEY="sk-..."  # or ANTHROPIC_API_KEY / DEEPSEEK_API_KEY
+        <box flexDirection="row" justifyContent="space-between" alignItems="center">
+          <text fg={theme.colors.warning}>
+            🔒 SAFE CREDENTIAL MANAGEMENT & CLI COMMANDS
+          </text>
+          <text fg={theme.colors.textMuted}>
+            Strict file permissions (0600) at ~/.nightglide/config.json
           </text>
         </box>
+        <text fg={theme.colors.textSecondary}>
+          CLI Commands: "nightglide login &lt;provider&gt;" · "nightglide providers" · "nightglide doctor"
+        </text>
         <box flexDirection="row" justifyContent="space-between" alignItems="center">
           <text fg={theme.colors.textMuted}>
-            Run "nightglide doctor" in your terminal anytime to verify toolchains and providers.
+            Switch providers and models anytime without vendor lock-in.
           </text>
           <box flexDirection="row" gap={1}>
             <text fg={theme.colors.accent}>[1] Welcome</text>

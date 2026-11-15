@@ -10,5 +10,6 @@ export {
   OmpAgentSession,
   parseDiffStats,
   generateUnifiedDiff,
+  LOCAL_COPILOT_DELEGATION_DIRECTIVE,
   type OmpAgentEngineOptions,
 } from "./omp-adapter.js";

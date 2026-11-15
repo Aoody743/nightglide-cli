@@ -360,10 +360,10 @@ describe("UI Theme Synchronization", () => {
     tm.setTheme("midnight-flight");
   });
 
-  test("ThemeManager initializes with midnight-flight and exposes 4 celestial themes", () => {
+  test("ThemeManager initializes with midnight-flight and exposes 6 themes", () => {
     const tm = getThemeManager();
     expect(tm.getActiveTheme().id).toBe("midnight-flight");
-    expect(tm.getAllThemes().length).toBe(4);
+    expect(tm.getAllThemes().length).toBe(6);
   });
 
   test("switching themes updates active theme and dispatches to subscriber", () => {

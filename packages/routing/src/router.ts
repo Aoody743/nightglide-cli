@@ -71,7 +71,11 @@ export class WorkloadModelRouter {
           category: options.explicitCategory,
           confidence: 1.0,
           requiredCapabilities: getRequiredCapabilitiesForCategory(options.explicitCategory),
-          isComplex: false,
+          isComplex:
+            options.explicitCategory === "plan" ||
+            options.explicitCategory === "review" ||
+            (options.filesCount ?? 0) > 10 ||
+            Boolean(options.isMultiStep),
           explanation: `Explicitly categorized as '${options.explicitCategory}'.`,
         }
       : classifyTask(options.prompt, {
@@ -290,7 +294,7 @@ export class WorkloadModelRouter {
         modelId: cloudCandidate.id,
         locality: "remote",
         mode: "BALANCED",
-        reason: `BALANCED mode: Complex task '${category}' routed to cloud model for superior reasoning capacity (User cloud authorized).`,
+        reason: `BALANCED mode: Complex task '${category}' routed to Cloud for heavy architectural reasoning (cloud authorized).`,
         requiresCloud: true,
         requiresApproval: false,
         fallbackChain,
@@ -312,9 +316,14 @@ export class WorkloadModelRouter {
           ]
         : localModels.filter((m) => m.id !== selected.id).map((m) => m.id);
 
-      const reason = isHeavyTask
-        ? `BALANCED mode: Complex task '${category}' kept on local model because cloud access is not authorized ('allowCloud: false').`
-        : `BALANCED mode: Routine task '${category}' kept on local model for speed and zero cost.`;
+      let reason: string;
+      if (isHeavyTask) {
+        reason = !allowCloud
+          ? `BALANCED mode: Complex task '${category}' kept on Local for fast zero-cost execution because cloud access is not authorized ('allowCloud: false').`
+          : `BALANCED mode: Complex task '${category}' kept on Local for fast zero-cost execution because no cloud models are available.`;
+      } else {
+        reason = `BALANCED mode: Routine task '${category}' kept on Local for fast zero-cost execution.`;
+      }
 
       return {
         taskCategory: category,

@@ -64,6 +64,7 @@ export class MockAgentSession implements AgentSession {
   readonly id: string;
   readonly model: string;
   readonly workspacePath: string;
+  readonly systemPrompt?: string;
 
   private status: AgentStatus = "idle";
   private disposed = false;
@@ -88,6 +89,7 @@ export class MockAgentSession implements AgentSession {
     this.id = `mock_session_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
     this.model = sessionOptions.model ?? "celestial-mock-v1";
     this.workspacePath = sessionOptions.workspacePath;
+    this.systemPrompt = sessionOptions.systemPrompt;
     this.stepDelayMs = engineOptions?.stepDelayMs ?? 10;
     this.greetingChunks = engineOptions?.greetingChunks ?? DEFAULT_MOCK_GREETING_CHUNKS;
     this.forceMultiAgent = Boolean(engineOptions?.forceMultiAgent);
@@ -501,7 +503,21 @@ export class MockAgentEngine implements AgentEngine {
   constructor(private readonly options: MockEngineOptions = {}) {}
 
   async createSession(options: CreateSessionOptions): Promise<AgentSession> {
-    return new MockAgentSession(options, this.options);
+    const userPrompt = options.systemPrompt?.trim();
+    const directive = `## Multi-Model Architecture & Local Co-Pilot
+You are operating within Nightglide's tiered multi-model environment.
+An on-device Local Model (such as oMLX / Ollama / Endless) is running locally on the user's machine.
+- Local Model Boundaries: Excellent for fast conversational replies, local file exploration, and small, localized code edits without network latency.
+- Lead Model Responsibilities: You are responsible for complex multi-file architectural changes, deep algorithmic problem solving, critical security audits, and comprehensive test suite validation.
+- Delegation: For lightweight, targeted sub-tasks, you may delegate or reference local tool executions seamlessly.`;
+
+    const systemPrompt = userPrompt
+      ? (userPrompt.includes("## Multi-Model Architecture & Local Co-Pilot")
+          ? userPrompt
+          : `${userPrompt}\n\n${directive}`)
+      : directive;
+
+    return new MockAgentSession({ ...options, systemPrompt }, this.options);
   }
 
   async checkHealth(): Promise<EngineHealthResult> {

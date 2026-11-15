@@ -8,6 +8,7 @@ export const midnightFlightTheme: Theme = {
   id: "midnight-flight",
   name: "Midnight Flight",
   type: "dark",
+  metaphor: "flight-deck",
   description: "Deep, elegant, cinematic celestial night sky.",
   colors: {
     background: "#090F20",
@@ -36,6 +37,7 @@ export const auroraTheme: Theme = {
   id: "aurora",
   name: "Aurora",
   type: "dark",
+  metaphor: "flight-deck",
   description: "Dreamlike, vibrant polar atmospheric aurora.",
   colors: {
     background: "#100C25",
@@ -64,6 +66,7 @@ export const cloudlightTheme: Theme = {
   id: "cloudlight",
   name: "Cloudlight",
   type: "light",
+  metaphor: "flight-deck",
   description: "Soft daylight, clean and welcoming airy sky.",
   colors: {
     background: "#F8FAFF",
@@ -92,6 +95,7 @@ export const daybreakTheme: Theme = {
   id: "daybreak",
   name: "Daybreak",
   type: "light",
+  metaphor: "flight-deck",
   description: "Warm, optimistic, artistic morning horizon.",
   colors: {
     background: "#FFFAF2",
@@ -112,11 +116,98 @@ export const daybreakTheme: Theme = {
   },
 };
 
+/**
+ * Theme 5: Abyss Trench (Dark)
+ * Deep Mariana trench black, bioluminescent sonar cyan, submarine titanium hull.
+ */
+export const abyssTrenchTheme: Theme = {
+  id: "abyss-trench",
+  name: "Abyss Trench",
+  type: "dark",
+  metaphor: "abyss-dive",
+  description:
+    "Deep Mariana trench black, bioluminescent sonar cyan, submarine titanium hull.",
+  sonarPing: "#00F0FF",
+  depthGauge: "#00E5A3",
+  hullBorder: "#1C324E",
+  colors: {
+    background: "#02060D",
+    surface: "#0B1524",
+    surfaceElevated: "#132238",
+    border: "#1C324E",
+    textPrimary: "#E2F1FF",
+    textSecondary: "#7FA1C4",
+    textMuted: "#446282",
+    accent: "#00F0FF",
+    accentSecondary: "#00E5A3",
+    success: "#00E5A3",
+    warning: "#FFB800",
+    error: "#F87171",
+    info: "#00F0FF",
+    selection: "#173454",
+    focus: "#00F0FF",
+  },
+};
+
+/**
+ * Theme 6: Abyss Challenger (Dark)
+ * Challenger deep violet-navy with high-voltage electric aqua telemetry.
+ */
+export const abyssChallengerTheme: Theme = {
+  id: "abyss-challenger",
+  name: "Abyss Challenger",
+  type: "dark",
+  metaphor: "abyss-dive",
+  description:
+    "Challenger deep violet-navy with high-voltage electric aqua telemetry.",
+  sonarPing: "#00FFE0",
+  depthGauge: "#38BDF8",
+  hullBorder: "#253556",
+  colors: {
+    background: "#040714",
+    surface: "#0F1629",
+    surfaceElevated: "#18233C",
+    border: "#253556",
+    textPrimary: "#F0F6FF",
+    textSecondary: "#8CA2C9",
+    textMuted: "#566C94",
+    accent: "#00FFE0",
+    accentSecondary: "#38BDF8",
+    success: "#34D399",
+    warning: "#FBBF24",
+    error: "#FB7185",
+    info: "#38BDF8",
+    selection: "#1E3052",
+    focus: "#00FFE0",
+  },
+};
+
+export const CELESTIAL_THEMES: readonly Theme[] = [
+  midnightFlightTheme,
+  auroraTheme,
+  cloudlightTheme,
+  daybreakTheme,
+] as const;
+
+export const ABYSS_THEMES: readonly Theme[] = [
+  abyssTrenchTheme,
+  abyssChallengerTheme,
+] as const;
+
 export const BUILTIN_THEMES: readonly Theme[] = [
   midnightFlightTheme,
   auroraTheme,
   cloudlightTheme,
   daybreakTheme,
+] as const;
+
+export const ALL_THEMES: readonly Theme[] = [
+  midnightFlightTheme,
+  auroraTheme,
+  cloudlightTheme,
+  daybreakTheme,
+  abyssTrenchTheme,
+  abyssChallengerTheme,
 ] as const;
 
 export const DEFAULT_THEME_ID = "midnight-flight";

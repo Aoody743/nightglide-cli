@@ -4,6 +4,7 @@ import { runDemoCommand } from "./commands/demo.js";
 import { runChatCommand } from "./commands/chat.js";
 import { runProvidersCommand } from "./commands/providers.js";
 import { runModelsCommand } from "./commands/models.js";
+import { runLoginCommand } from "./commands/login.js";
 
 const VERSION = "0.3.0 (M2 Native AI Coding & Flight Deck)";
 
@@ -20,6 +21,7 @@ function printHelp(): void {
 
   COMMANDS:
     (default)       Launch the Nightglide interactive TUI
+    login [prov]    Authenticate via official subscription (OAuth) or set provider API key
     demo            Launch collaborative multi-agent simulation (No API key needed)
     providers       List configured local & cloud providers and probe connection status
     models          Display available models, capabilities, and agent role mappings
@@ -30,6 +32,9 @@ function printHelp(): void {
 
   EXAMPLES:
     $ nightglide
+    $ nightglide login codex
+    $ nightglide login openai --key sk-...
+    $ nightglide login --status
     $ nightglide demo
     $ nightglide providers
     $ nightglide models
@@ -44,6 +49,10 @@ async function main(): Promise<void> {
   switch (command) {
     case "doctor":
       await printDoctorReport();
+      break;
+
+    case "login":
+      await runLoginCommand(args.slice(1));
       break;
 
     case "providers":

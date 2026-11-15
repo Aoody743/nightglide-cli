@@ -5,6 +5,10 @@ import {
   REDUCED_MOTION_SPINNER,
   type MotionMode,
 } from "../../motion/constants.js";
+import {
+  type VendorSignature,
+  resolveProviderVendor,
+} from "../../motion/vendors.js";
 import { useMotionMode } from "../../motion/reducedMotion.js";
 import { useSpinner } from "../../motion/hooks.js";
 import { oscillateColors } from "../../motion/color.js";
@@ -16,6 +20,9 @@ export interface ThinkingIndicatorProps {
   slotWidth?: number;
   motionMode?: MotionMode;
   active?: boolean;
+  modelId?: string;
+  providerId?: string;
+  vendor?: VendorSignature;
 }
 
 export interface ThinkingStatePresentation {
@@ -28,38 +35,56 @@ export interface ThinkingStatePresentation {
 
 /**
  * Pure presentation helper for ANIM-THINK-001.
- * Ensures deterministic rendering and slot width stability.
+ * Ensures deterministic rendering, vendor kinetic styling, and slot width stability.
  */
 export function getThinkingPresentation(
   theme: Theme,
   frameIndex: number,
   isReduced: boolean,
   label: string = "正在思考...",
-  slotWidth: number = 2
+  slotWidth?: number,
+  vendorOrModel?: VendorSignature | string
 ): ThinkingStatePresentation {
+  const vendor =
+    typeof vendorOrModel === "string"
+      ? resolveProviderVendor(vendorOrModel)
+      : vendorOrModel;
+
+  const effectiveSlotWidth =
+    slotWidth !== undefined ? slotWidth : (vendor?.defaultSlotWidth ?? 2);
+
   if (isReduced) {
-    const symbol = REDUCED_MOTION_SPINNER;
+    const symbol = vendor?.miniGlyph ?? REDUCED_MOTION_SPINNER;
     return {
       symbol,
-      formattedSlot: reserveSlot(symbol, slotWidth),
-      symbolColor: theme.colors.accent,
+      formattedSlot: reserveSlot(symbol, effectiveSlotWidth),
+      symbolColor: vendor ? vendor.brandColor : theme.colors.accent,
       label,
       labelColor: theme.colors.textSecondary,
     };
   }
 
-  const safeIndex = frameIndex % THINKING_SPINNER_FRAMES.length;
-  const symbol = THINKING_SPINNER_FRAMES[safeIndex] ?? THINKING_SPINNER_FRAMES[0]!;
-  const symbolColor = oscillateColors(
-    theme.colors.textMuted,
-    theme.colors.accent,
-    safeIndex,
-    THINKING_SPINNER_FRAMES.length
-  );
+  const frames = vendor?.frames ?? THINKING_SPINNER_FRAMES;
+  const safeIndex = frameIndex % frames.length;
+  const symbol = frames[safeIndex] ?? frames[0]!;
+
+  const symbolColor = vendor
+    ? oscillateColors(
+        vendor.secondaryColor ?? theme.colors.textMuted,
+        vendor.brandColor,
+        safeIndex,
+        frames.length
+      )
+    : oscillateColors(
+        theme.colors.textMuted,
+        theme.colors.accent,
+        safeIndex,
+        frames.length
+      );
 
   return {
     symbol,
-    formattedSlot: reserveSlot(symbol, slotWidth),
+    formattedSlot: reserveSlot(symbol, effectiveSlotWidth),
     symbolColor,
     label,
     labelColor: theme.colors.textSecondary,
@@ -69,26 +94,42 @@ export function getThinkingPresentation(
 /**
  * ANIM-THINK-001: Celestial Pulse Thinking Indicator
  *
- * Renders a fixed-width rotating spinner (⠋, ⠙, ⠹, ⠸, ⠼, ⠴) at 10 FPS with
- * sinusoidal color oscillation between textMuted and accent.
+ * Renders a fixed-width rotating spinner at 10 FPS with sinusoidal color oscillation.
+ * When a vendor (modelId or providerId) is specified, uses the vendor's signature
+ * frames and brand colors (e.g. Claude terracotta pulse, OpenAI rosette, Gemini constellation).
  *
  * When motion is "off" or "reduced":
- * - Displays static "✦" indicator.
+ * - Displays static vendor mini glyph or "✦" indicator.
  * - Starts zero interval timers (zero CPU consumption).
  */
 export function ThinkingIndicator({
   theme,
   label = "正在思考...",
-  slotWidth = 2,
+  slotWidth,
   motionMode,
   active = true,
+  modelId,
+  providerId,
+  vendor,
 }: ThinkingIndicatorProps) {
+  const vendorSignature =
+    vendor ??
+    (modelId || providerId
+      ? resolveProviderVendor(modelId || providerId)
+      : undefined);
+
+  const effectiveSlotWidth =
+    slotWidth !== undefined
+      ? slotWidth
+      : (vendorSignature?.defaultSlotWidth ?? 2);
+
   const { isReduced } = useMotionMode(motionMode);
   const { frameIndex } = useSpinner({
     fps: 10,
     active,
     motionMode,
-    slotWidth,
+    frames: vendorSignature?.frames,
+    slotWidth: effectiveSlotWidth,
   });
 
   const presentation = getThinkingPresentation(
@@ -96,7 +137,8 @@ export function ThinkingIndicator({
     frameIndex,
     isReduced || !active,
     label,
-    slotWidth
+    effectiveSlotWidth,
+    vendorSignature
   );
 
   if (!active) {
@@ -110,3 +152,4 @@ export function ThinkingIndicator({
     </box>
   );
 }
+

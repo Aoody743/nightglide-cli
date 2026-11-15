@@ -1,5 +1,11 @@
 import type { Theme } from "./tokens.js";
-import { BUILTIN_THEMES, DEFAULT_THEME_ID, midnightFlightTheme } from "./themes.js";
+import {
+  BUILTIN_THEMES,
+  DEFAULT_THEME_ID,
+  midnightFlightTheme,
+  abyssTrenchTheme,
+  abyssChallengerTheme,
+} from "./themes.js";
 
 export type ThemeChangeListener = (theme: Theme) => void;
 
@@ -12,6 +18,8 @@ export class ThemeManager {
     for (const theme of BUILTIN_THEMES) {
       this.themes.set(theme.id, theme);
     }
+    this.registerTheme(abyssTrenchTheme);
+    this.registerTheme(abyssChallengerTheme);
     this.activeTheme = this.themes.get(initialThemeId) ?? midnightFlightTheme;
   }
 
