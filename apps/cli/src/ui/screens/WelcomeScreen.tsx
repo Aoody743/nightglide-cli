@@ -1,6 +1,7 @@
 import React from "react";
 import type { Theme } from "@nightglide/themes";
 import type { ScreenId } from "../components/Header.js";
+import type { TerminalDimensions } from "../dimensions.js";
 
 export interface WelcomeScreenProps {
   theme: Theme;
@@ -8,6 +9,7 @@ export interface WelcomeScreenProps {
   workspacePath?: string;
   model?: string;
   isMock?: boolean;
+  dimensions?: TerminalDimensions;
 }
 
 export function WelcomeScreen({
@@ -16,6 +18,7 @@ export function WelcomeScreen({
   workspacePath = process.cwd(),
   model = "qwen2.5-coder:7b",
   isMock = false,
+  dimensions,
 }: WelcomeScreenProps) {
   const home = process.env.HOME || "";
   const displayPath =
@@ -23,14 +26,16 @@ export function WelcomeScreen({
       ? "~" + workspacePath.slice(home.length)
       : workspacePath;
 
+  const isCompact = dimensions?.isCompactHeight ?? false;
+
   return (
     <box
       flexDirection="column"
       width="100%"
       height="100%"
       backgroundColor={theme.colors.background}
-      paddingX={3}
-      paddingY={1}
+      paddingX={dimensions?.isCompactWidth ? 1 : 3}
+      paddingY={isCompact ? 0 : 1}
       gap={1}
     >
       {/* Celestial Horizon Banner */}
@@ -38,31 +43,44 @@ export function WelcomeScreen({
         flexDirection="column"
         alignItems="center"
         justifyContent="center"
-        paddingY={1}
+        paddingY={isCompact ? 0 : 1}
         borderColor={theme.colors.border}
         borderStyle="single"
         backgroundColor={theme.colors.surface}
       >
-        <text fg={theme.colors.accentSecondary}>
-          ✦   *      ·         ★         ·      *   ✦
-        </text>
-        <text fg={theme.colors.accent}>
-          _  _ _ ____ _  _ ___ ____ _    _ ___  ____
-        </text>
-        <text fg={theme.colors.accent}>
-          |\ | | | __ |--|  |  |__, |___ | |__] |===
-        </text>
-        <text fg={theme.colors.accentSecondary}>
-          ·      ★         ✦  N I G H T G L I D E  ✦         ★      ·
-        </text>
-        <box marginTop={1} flexDirection="column" alignItems="center">
-          <text fg={theme.colors.textPrimary}>
-            Build beyond the horizon.
-          </text>
-          <text fg={theme.colors.textMuted}>
-            漫翔苍穹，构筑所想。
-          </text>
-        </box>
+        {isCompact ? (
+          <box flexDirection="column" alignItems="center">
+            <text fg={theme.colors.accent}>
+              ✦ NIGHTGLIDE · Build beyond the horizon ✦
+            </text>
+            <text fg={theme.colors.textMuted}>
+              漫翔苍穹，构筑所想。
+            </text>
+          </box>
+        ) : (
+          <>
+            <text fg={theme.colors.accentSecondary}>
+              ✦   *      ·         ★         ·      *   ✦
+            </text>
+            <text fg={theme.colors.accent}>
+              _  _ _ ____ _  _ ___ ____ _    _ ___  ____
+            </text>
+            <text fg={theme.colors.accent}>
+              |\ | | | __ |--|  |  |__, |___ | |__] |===
+            </text>
+            <text fg={theme.colors.accentSecondary}>
+              ·      ★         ✦  N I G H T G L I D E  ✦         ★      ·
+            </text>
+            <box marginTop={1} flexDirection="column" alignItems="center">
+              <text fg={theme.colors.textPrimary}>
+                Build beyond the horizon.
+              </text>
+              <text fg={theme.colors.textMuted}>
+                漫翔苍穹，构筑所想。
+              </text>
+            </box>
+          </>
+        )}
       </box>
 
       {/* System Context Card */}

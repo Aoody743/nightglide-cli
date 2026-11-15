@@ -348,10 +348,31 @@ export class MockAgentSession implements AgentSession {
   async cancel(): Promise<void> {
     if (this.disposed) return;
     this.isCancelled = true;
+    this.setStatus("cancelling", "Cancelling flight sequence and subagents...");
     if (this.currentAbortController) {
-      this.setStatus("cancelling");
       this.currentAbortController.abort();
     }
+    for (const [subagentId, subagent] of this.subagents.entries()) {
+      if (
+        subagent.status === "thinking" ||
+        subagent.status === "streaming" ||
+        subagent.status === "executing_tool"
+      ) {
+        const ended: SubagentMonitorItem = {
+          ...subagent,
+          status: "completed",
+          endedAt: Date.now(),
+        };
+        this.subagents.set(subagentId, ended);
+        this.emit({
+          type: "subagent_end",
+          subagentId,
+          result: "Subagent cancelled.",
+          error: "Subagent cancelled by user.",
+        });
+      }
+    }
+    this.setStatus("idle", "Flight sequence cancelled by user.");
   }
 
   async dispose(): Promise<void> {
@@ -360,6 +381,15 @@ export class MockAgentSession implements AgentSession {
     await this.cancel();
     this.subscribers.clear();
     this.status = "idle";
+    for (const [subagentId, subagent] of this.subagents.entries()) {
+      if (!subagent.endedAt) {
+        this.subagents.set(subagentId, {
+          ...subagent,
+          status: "completed",
+          endedAt: Date.now(),
+        });
+      }
+    }
   }
 
   getState(): SessionState {

@@ -22,6 +22,10 @@ import {
   SessionDisposedError,
   RoutingPolicyViolationError,
 } from "@nightglide/core";
+import {
+  resolveEndpointLocality,
+  type ProviderRegistry,
+} from "@nightglide/providers";
 
 export interface OmpAgentEngineOptions {
   defaultWorkspacePath?: string;
@@ -29,6 +33,107 @@ export interface OmpAgentEngineOptions {
   defaultModel?: string;
   model?: string;
   baseUrl?: string;
+  providerRegistry?: ProviderRegistry;
+}
+
+/** Mutating tool names strictly prohibited in read-only mode */
+export const MUTATING_TOOL_NAMES = new Set(["write", "edit", "bash"]);
+
+/** Subagent types that are guaranteed read-only and permitted to spawn in read-only mode */
+export const READ_ONLY_PERMITTED_AGENTS = new Set([
+  "scout",
+  "security-reviewer",
+  "seance",
+]);
+
+/**
+ * Creates a strict privacy model assertion guard: validates provider locality,
+ * endpoint URLs (WHATWG + RFC loopback/SSRF checks), and model selectors
+ * before any outbound dispatch occurs.
+ */
+export function createModelDispatchGuard(
+  options: CreateSessionOptions,
+  providerRegistry?: ProviderRegistry
+): (model: any) => void {
+  return (model: any) => {
+    const isLocalMode = options.routingMode === "LOCAL";
+    const isCloudBlocked = options.allowCloud === false;
+
+    if (isLocalMode || isCloudBlocked) {
+      const providerName = String(model?.provider || "").toLowerCase().trim();
+      const modelId = String(model?.id || "").toLowerCase().trim();
+      const baseUrl = model?.baseUrl ? String(model.baseUrl).trim() : undefined;
+
+      // 1. If an explicit endpoint baseUrl is present, strictly enforce locality via WHATWG + RFC checks
+      if (baseUrl) {
+        const locality = resolveEndpointLocality(baseUrl);
+        if (locality !== "local") {
+          throw new RoutingPolicyViolationError(
+            `Strict privacy policy violation: model '${model?.id}' (${model?.provider}) targeted non-local endpoint '${baseUrl}' (resolved locality: '${locality}') while in ${options.routingMode || "LOCAL"} mode.`
+          );
+        }
+      }
+
+      // 2. Reject known public cloud providers outright
+      const knownCloudProviders = new Set([
+        "openai",
+        "anthropic",
+        "google",
+        "azure",
+        "cohere",
+        "mistral",
+        "together",
+        "groq",
+        "openrouter",
+        "deepseek",
+        "bedrock",
+        "aws",
+        "gemini",
+      ]);
+
+      if (knownCloudProviders.has(providerName)) {
+        throw new RoutingPolicyViolationError(
+          `Strict privacy policy violation: model '${model?.id}' (${model?.provider}) attempted unauthorized cloud transmission while in ${options.routingMode || "LOCAL"} mode.`
+        );
+      }
+
+      // 3. Inspect model selector / ID for cloud provider prefixes
+      for (const cloudP of knownCloudProviders) {
+        if (modelId.startsWith(`${cloudP}/`) || modelId.startsWith(`${cloudP}:`)) {
+          throw new RoutingPolicyViolationError(
+            `Strict privacy policy violation: model '${model?.id}' targets cloud provider '${cloudP}' while in ${options.routingMode || "LOCAL"} mode.`
+          );
+        }
+      }
+
+      // 4. If a providerRegistry is supplied, verify against its registered locality
+      if (providerRegistry) {
+        const registered = providerRegistry.get(providerName);
+        if (registered && registered.locality !== "local") {
+          throw new RoutingPolicyViolationError(
+            `Strict privacy policy violation: registered provider '${providerName}' has locality '${registered.locality}', violating ${options.routingMode || "LOCAL"} mode.`
+          );
+        }
+      }
+
+      // 5. Must be a recognized local provider or local selector
+      const isRecognizedLocal =
+        providerName === "local" ||
+        providerName === "omlx" ||
+        providerName === "ollama" ||
+        providerName === "lmstudio" ||
+        modelId.startsWith("omlx/") ||
+        modelId.startsWith("local/") ||
+        modelId.startsWith("ollama/") ||
+        modelId.startsWith("lmstudio/");
+
+      if (!isRecognizedLocal && !baseUrl) {
+        throw new RoutingPolicyViolationError(
+          `Strict privacy policy violation: unrecognized provider '${model?.provider}' (model '${model?.id}') cannot be verified as local while in ${options.routingMode || "LOCAL"} mode.`
+        );
+      }
+    }
+  };
 }
 
 type OmpSessionInstance = Awaited<ReturnType<typeof createAgentSession>>["session"];
@@ -42,6 +147,7 @@ export class OmpAgentSession implements AgentSession {
   readonly id: string;
   readonly model: string;
   readonly workspacePath: string;
+  readonly readOnly: boolean;
 
   private readonly ompSession: OmpSessionInstance;
   private readonly subagentEventBus?: OmpEventBus;
@@ -58,12 +164,14 @@ export class OmpAgentSession implements AgentSession {
     workspacePath: string,
     model: string,
     subagentEventBus?: OmpEventBus,
-    sessionId?: string
+    sessionId?: string,
+    readOnly = false
   ) {
     this.ompSession = ompSession;
     this.workspacePath = workspacePath;
     this.model = model;
     this.subagentEventBus = subagentEventBus;
+    this.readOnly = readOnly;
     this.id = sessionId ?? ompSession.sessionManager.getSessionId?.() ?? `omp_session_${Date.now()}`;
 
     // Subscribe to internal main OMP session events
@@ -140,6 +248,18 @@ export class OmpAgentSession implements AgentSession {
       }
 
       case "tool_execution_start": {
+        // Enforce below-the-prompt invariant: hard block on mutating tools in read-only mode
+        if (this.readOnly && MUTATING_TOOL_NAMES.has(event.toolName)) {
+          this.setStatus("error", `Security violation: mutating tool '${event.toolName}' blocked in read-only mode.`);
+          this.emit({
+            type: "error",
+            error: `Security violation: mutating tool '${event.toolName}' is strictly prohibited in read-only mode.`,
+            recoverable: false,
+          });
+          void this.ompSession.abort({ reason: "Read-only policy violation" } as any);
+          break;
+        }
+
         this.setStatus("executing_tool", `Executing tool: ${event.toolName}`);
         this.emit({
           type: "tool_start",
@@ -231,6 +351,19 @@ export class OmpAgentSession implements AgentSession {
     };
 
     switch (innerEvent.type) {
+      case "tool_execution_start": {
+        if (this.readOnly && MUTATING_TOOL_NAMES.has(innerEvent.toolName)) {
+          this.emit({
+            type: "error",
+            error: `Security violation: Subagent '${subagentId}' attempted mutating tool '${innerEvent.toolName}' in read-only mode.`,
+            recoverable: false,
+          });
+          void this.cancel();
+          break;
+        }
+        break;
+      }
+
       case "agent_start":
       case "turn_start": {
         this.subagents.set(subagentId, { ...subItem, status: "thinking" });
@@ -310,19 +443,45 @@ export class OmpAgentSession implements AgentSession {
 
   async cancel(): Promise<void> {
     if (this.disposed || Boolean(this.ompSession.isDisposed)) return;
-    this.setStatus("cancelling");
+    this.setStatus("cancelling", "Cancelling session and active subagents...");
     try {
-      await this.ompSession.abort();
+      await this.ompSession.abort({ reason: "User cancelled session" } as any);
     } catch {
       // Abort is safe no-op if session already idle
     } finally {
-      this.setStatus("idle");
+      // Cleanly terminate and transition any active subagents to terminal status
+      for (const [subagentId, subagent] of this.subagents.entries()) {
+        if (
+          subagent.status === "thinking" ||
+          subagent.status === "streaming" ||
+          subagent.status === "executing_tool"
+        ) {
+          const ended: SubagentMonitorItem = {
+            ...subagent,
+            status: "completed",
+            endedAt: Date.now(),
+          };
+          this.subagents.set(subagentId, ended);
+          this.emit({
+            type: "subagent_end",
+            subagentId,
+            result: "Subagent cancelled.",
+            error: "Subagent execution halted by user cancellation.",
+          });
+        }
+      }
+      this.setStatus("idle", "Session cancelled.");
     }
   }
 
   async dispose(): Promise<void> {
     if (this.disposed) return;
     this.disposed = true;
+
+    // Terminate any active work cleanly
+    try {
+      await this.cancel();
+    } catch {}
 
     if (this.unsubscribeOmp) {
       try {
@@ -340,6 +499,17 @@ export class OmpAgentSession implements AgentSession {
 
     this.subscribers.clear();
     this.status = "idle";
+
+    // Ensure all subagents are marked completed
+    for (const [subagentId, subagent] of this.subagents.entries()) {
+      if (!subagent.endedAt) {
+        this.subagents.set(subagentId, {
+          ...subagent,
+          status: "completed",
+          endedAt: Date.now(),
+        });
+      }
+    }
 
     try {
       await this.ompSession.dispose();
@@ -362,8 +532,8 @@ export class OmpAgentSession implements AgentSession {
 
 /**
  * Production AgentEngine implementation backed by Oh-My-Pi (OMP).
- * Features native subagent delegation via `task`, strict privacy enforcement via `assertDispatchModel`,
- * and dynamic role-based model overrides.
+ * Features native subagent delegation via `task`, strict below-the-prompt permission isolation,
+ * model dispatch validation via `assertDispatchModel`, and dynamic role-based model overrides.
  */
 export class OmpAgentEngine implements AgentEngine {
   readonly id = "omp-adapter";
@@ -377,7 +547,21 @@ export class OmpAgentEngine implements AgentEngine {
       this.options.defaultAgentDir ??
       path.join(os.tmpdir(), "nightglide-omp-isolated");
 
-    const settings = Settings.isolated();
+    // Configure isolated settings with permission invariants
+    const baseOverrides: Record<string, unknown> = {};
+
+    if (options.readOnly) {
+      // 1. Settings-level deny for all mutating tools (inherited by subagents live)
+      baseOverrides["tools.approval"] = {
+        write: "deny",
+        edit: "deny",
+        bash: "deny",
+      };
+      // 2. Settings-level disable of mutating agents (task, reviewer, sonic)
+      baseOverrides["task.disabledAgents"] = ["task", "reviewer", "sonic"];
+    }
+
+    const settings = Settings.isolated(baseOverrides);
 
     // Configure role-based model mappings in OMP settings
     if (options.roleModelOverrides) {
@@ -396,27 +580,10 @@ export class OmpAgentEngine implements AgentEngine {
     }
 
     // Strict privacy model assertion guard: called before any model request on wire
-    const assertDispatchModel = (model: any) => {
-      const isLocalMode = options.routingMode === "LOCAL";
-      const isCloudBlocked = !options.allowCloud;
-
-      if (isLocalMode || isCloudBlocked) {
-        const providerName = String(model?.provider || "").toLowerCase();
-        const modelId = String(model?.id || "").toLowerCase();
-        const isLocalProvider =
-          providerName === "local" ||
-          providerName === "omlx" ||
-          providerName === "ollama" ||
-          modelId.startsWith("omlx/") ||
-          modelId.startsWith("local/");
-
-        if (!isLocalProvider) {
-          throw new RoutingPolicyViolationError(
-            `Strict privacy policy violation: model '${model?.id}' (${model?.provider}) attempted unauthorized cloud transmission while in ${options.routingMode || "LOCAL"} mode.`
-          );
-        }
-      }
-    };
+    const assertDispatchModel = createModelDispatchGuard(
+      options,
+      this.options.providerRegistry
+    );
 
     const allowedTools = options.readOnly
       ? ["read", "find", "grep", "task"]
@@ -437,6 +604,23 @@ export class OmpAgentEngine implements AgentEngine {
       assertDispatchModel,
     });
 
+    // When readOnly is true, enforce below-the-prompt tool guard on the task tool
+    if (options.readOnly) {
+      const taskTool = sessionResult.session.getToolByName?.("task");
+      if (taskTool && typeof taskTool.execute === "function") {
+        const originalExecute = taskTool.execute.bind(taskTool);
+        taskTool.execute = async (toolCallId: string, params: any, ...rest: any[]) => {
+          const requestedAgent = String(params?.agent ?? "task").toLowerCase();
+          if (!READ_ONLY_PERMITTED_AGENTS.has(requestedAgent)) {
+            throw new EngineError(
+              `Permission denied: Subagent '${requestedAgent}' requires mutating permissions (bash/write/edit) which are strictly prohibited in read-only mode. Only read-only subagents (such as 'scout') are permitted.`
+            );
+          }
+          return originalExecute(toolCallId, params, ...rest);
+        };
+      }
+    }
+
     const resolvedModel =
       sessionResult.session.model?.id ??
       options.model ??
@@ -448,7 +632,9 @@ export class OmpAgentEngine implements AgentEngine {
       sessionResult.session,
       options.workspacePath,
       resolvedModel,
-      sessionResult.subagentEventBus
+      sessionResult.subagentEventBus,
+      undefined,
+      Boolean(options.readOnly)
     );
   }
 

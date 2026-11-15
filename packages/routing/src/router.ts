@@ -9,10 +9,16 @@ import {
   ProviderUnavailableError,
   RoutingPolicyViolationError,
   CloudAuthorizationRequiredError,
+  ManualRoleNotAssignedError,
+  ModelCapabilityMismatchError,
 } from "@nightglide/core";
 import type { RoutingConfig } from "@nightglide/config";
 import type { ProviderRegistry } from "@nightglide/providers";
-import { classifyTask, type ClassificationResult } from "./classifier.js";
+import {
+  classifyTask,
+  getRequiredCapabilitiesForCategory,
+  type ClassificationResult,
+} from "./classifier.js";
 
 export interface RouteTaskOptions {
   prompt: string;
@@ -35,6 +41,7 @@ export class WorkloadModelRouter {
 
   /**
    * Determine the target agent role for a task category.
+   * If an explicitRole is specified, it strictly overrides the category mapping.
    */
   resolveRoleForCategory(category: TaskCategory, explicitRole?: AgentRole): AgentRole {
     if (explicitRole) return explicitRole;
@@ -64,7 +71,7 @@ export class WorkloadModelRouter {
       ? {
           category: options.explicitCategory,
           confidence: 1.0,
-          requiredCapabilities: ["coding"],
+          requiredCapabilities: getRequiredCapabilitiesForCategory(options.explicitCategory),
           isComplex: false,
           explanation: `Explicitly categorized as '${options.explicitCategory}'.`,
         }
@@ -78,21 +85,31 @@ export class WorkloadModelRouter {
     const mode = this.routingConfig.mode;
     const allowCloud = this.routingConfig.allowCloud;
 
+    // 1. MANUAL MODE: Exact role assignments take absolute precedence
+    // Evaluated immediately so unassigned roles fail fast with ManualRoleNotAssignedError
+    if (mode === "MANUAL") {
+      return this.routeManualMode(category, role, classification);
+    }
+
     // Available models across providers
     const allModels = this.registry.listModels();
-    const localModels = allModels.filter((m) => m.locality === "local");
-    const cloudModels = allModels.filter((m) => m.locality === "remote");
-
     if (allModels.length === 0) {
       throw new ModelNotConfiguredError(
         "No models found in ProviderRegistry. Please configure at least one local or cloud provider."
       );
     }
 
-    // 1. MANUAL MODE: Exact role assignments take absolute precedence
-    if (mode === "MANUAL") {
-      return this.routeManualMode(category, role, classification, localModels, cloudModels);
-    }
+    const localModels = allModels.filter((m) => {
+      if (m.locality !== "local") return false;
+      const provider = this.registry.get(m.providerId);
+      return provider && provider.enabled !== false && (!provider.lastCheck || provider.lastCheck.connected !== false);
+    });
+
+    const cloudModels = allModels.filter((m) => {
+      if (m.locality !== "remote") return false;
+      const provider = this.registry.get(m.providerId);
+      return provider && provider.enabled !== false && (!provider.lastCheck || provider.lastCheck.connected !== false);
+    });
 
     // 2. LOCAL MODE: Only local models permitted; cloud is strictly forbidden
     if (mode === "LOCAL") {
@@ -111,56 +128,95 @@ export class WorkloadModelRouter {
   private routeManualMode(
     category: TaskCategory,
     role: AgentRole,
-    classification: ClassificationResult,
-    localModels: ModelDescriptor[],
-    cloudModels: ModelDescriptor[]
+    classification: ClassificationResult
   ): RoutingDecision {
-    const explicitModelId = this.routingConfig.roleAssignments[role];
-    if (explicitModelId) {
-      const model = this.registry.getModel(explicitModelId);
-      if (!model) {
-        throw new ModelNotConfiguredError(
-          `MANUAL mode: model '${explicitModelId}' explicitly assigned to role '${role}' is not found in registry.`
-        );
-      }
+    const explicitModelId = this.routingConfig.roleAssignments?.[role];
 
-      if (model.locality === "remote" && !this.routingConfig.allowCloud) {
-        throw new CloudAuthorizationRequiredError(
-          model.id,
-          model.providerId,
-          `MANUAL assignment of cloud model '${model.id}' requires 'routing.allowCloud: true'.`
-        );
-      }
-
-      return {
-        taskCategory: category,
-        agentRole: role,
-        providerId: model.providerId,
-        modelId: model.id,
-        locality: model.locality,
-        mode: "MANUAL",
-        reason: `Explicit user assignment for role '${role}'.`,
-        requiresCloud: model.locality === "remote",
-        requiresApproval: false,
-        fallbackChain: [],
-        estimatedCost: model.locality === "local" ? "Free (Local)" : "Unknown",
-      };
+    // Check if explicit assignment exists for this role
+    if (!explicitModelId || !explicitModelId.trim()) {
+      throw new ManualRoleNotAssignedError(
+        role,
+        `MANUAL mode requires an explicit model assignment for role '${role}'. Please configure 'routing.roleAssignments.${role}'.`
+      );
     }
 
-    // If not explicitly set for this role, use first local or cloud model
-    const candidate = localModels[0] || cloudModels[0];
+    const trimmedModelId = explicitModelId.trim();
+
+    // Look up assigned model in the registry
+    const model = this.registry.getModel(trimmedModelId);
+    if (!model) {
+      throw new ModelNotConfiguredError(
+        `MANUAL mode: Model '${trimmedModelId}' assigned to role '${role}' is not found in registry.`
+      );
+    }
+
+    // Verify provider existence and availability
+    const provider = this.registry.get(model.providerId);
+    if (!provider) {
+      throw new ProviderUnavailableError(
+        model.providerId,
+        `Provider '${model.providerId}' for model '${model.id}' is not registered.`
+      );
+    }
+
+    if (provider.enabled === false) {
+      throw new ProviderUnavailableError(
+        model.providerId,
+        `Provider '${model.providerId}' for model '${model.id}' is disabled.`
+      );
+    }
+
+    if (provider.lastCheck && provider.lastCheck.connected === false) {
+      throw new ProviderUnavailableError(
+        model.providerId,
+        `Provider '${model.providerId}' for model '${model.id}' is unreachable or disconnected: ${provider.lastCheck.message}`
+      );
+    }
+
+    // Verify cloud authorization
+    if (model.locality === "remote" && !this.routingConfig.allowCloud) {
+      throw new CloudAuthorizationRequiredError(
+        model.id,
+        model.providerId,
+        `MANUAL assignment of cloud model '${model.id}' for role '${role}' requires 'routing.allowCloud: true'.`
+      );
+    }
+
+    // Verify required capabilities
+    if (classification.requiredCapabilities && classification.requiredCapabilities.length > 0) {
+      const missingCapabilities = classification.requiredCapabilities.filter(
+        (cap) => !model.capabilities.includes(cap)
+      );
+      if (missingCapabilities.length > 0) {
+        throw new ModelCapabilityMismatchError(
+          model.id,
+          missingCapabilities,
+          `Model '${model.id}' assigned to role '${role}' does not satisfy required capabilities: ${missingCapabilities.join(", ")}`
+        );
+      }
+    }
+
+    // Fallbacks in MANUAL mode may only be used if explicitly configured by the user
+    const explicitFallbacks = this.routingConfig.fallbackAssignments?.[role] ?? [];
+    const validFallbacks = explicitFallbacks.filter((fbId) => {
+      const fbModel = this.registry.getModel(fbId);
+      if (!fbModel) return false;
+      if (fbModel.locality === "remote" && !this.routingConfig.allowCloud) return false;
+      return true;
+    });
+
     return {
       taskCategory: category,
       agentRole: role,
-      providerId: candidate.providerId,
-      modelId: candidate.id,
-      locality: candidate.locality,
+      providerId: model.providerId,
+      modelId: model.id,
+      locality: model.locality,
       mode: "MANUAL",
-      reason: `No explicit assignment for role '${role}'; falling back to default model.`,
-      requiresCloud: candidate.locality === "remote",
-      requiresApproval: candidate.locality === "remote" && !this.routingConfig.allowCloud,
-      fallbackChain: [],
-      estimatedCost: candidate.locality === "local" ? "Free (Local)" : "Unknown",
+      reason: `Explicit user assignment for role '${role}'.`,
+      requiresCloud: model.locality === "remote",
+      requiresApproval: false,
+      fallbackChain: validFallbacks,
+      estimatedCost: model.locality === "local" ? "Free (Local)" : "Unknown",
     };
   }
 
@@ -211,15 +267,18 @@ export class WorkloadModelRouter {
     cloudModels: ModelDescriptor[],
     allowCloud: boolean
   ): RoutingDecision {
-    // Determine whether this task benefits significantly from a cloud model
+    // Determine whether this task is a complex planning/review task that benefits from cloud
     const isHeavyTask =
       category === "plan" ||
       category === "review" ||
       classification.isComplex;
 
     if (isHeavyTask && cloudModels.length > 0 && allowCloud) {
-      // Pick best cloud model
+      // Pick best cloud model matching capabilities
       const cloudCandidate =
+        cloudModels.find((m) =>
+          classification.requiredCapabilities.some((cap) => m.capabilities.includes(cap))
+        ) ||
         cloudModels.find((m) => m.capabilities.includes("reasoning") || m.capabilities.includes("planning")) ||
         cloudModels[0];
 
@@ -243,12 +302,20 @@ export class WorkloadModelRouter {
     // Otherwise prefer local model
     if (localModels.length > 0) {
       const selected =
-        localModels.find((m) => classification.requiredCapabilities.some((cap) => m.capabilities.includes(cap))) ||
-        localModels[0];
+        localModels.find((m) =>
+          classification.requiredCapabilities.some((cap) => m.capabilities.includes(cap))
+        ) || localModels[0];
 
       const fallbackChain = allowCloud
-        ? [...localModels.filter((m) => m.id !== selected.id).map((m) => m.id), ...cloudModels.map((m) => m.id)]
+        ? [
+            ...localModels.filter((m) => m.id !== selected.id).map((m) => m.id),
+            ...cloudModels.map((m) => m.id),
+          ]
         : localModels.filter((m) => m.id !== selected.id).map((m) => m.id);
+
+      const reason = isHeavyTask
+        ? `BALANCED mode: Complex task '${category}' kept on local model because cloud access is not authorized ('allowCloud: false').`
+        : `BALANCED mode: Routine task '${category}' kept on local model for speed and zero cost.`;
 
       return {
         taskCategory: category,
@@ -257,7 +324,7 @@ export class WorkloadModelRouter {
         modelId: selected.id,
         locality: "local",
         mode: "BALANCED",
-        reason: `BALANCED mode: Routine task '${category}' kept on local model for speed and zero cost.`,
+        reason,
         requiresCloud: false,
         requiresApproval: false,
         fallbackChain,
@@ -275,17 +342,22 @@ export class WorkloadModelRouter {
         );
       }
 
+      const cloudCandidate =
+        cloudModels.find((m) =>
+          classification.requiredCapabilities.some((cap) => m.capabilities.includes(cap))
+        ) || cloudModels[0];
+
       return {
         taskCategory: category,
         agentRole: role,
-        providerId: cloudModels[0].providerId,
-        modelId: cloudModels[0].id,
+        providerId: cloudCandidate.providerId,
+        modelId: cloudCandidate.id,
         locality: "remote",
         mode: "BALANCED",
-        reason: `BALANCED mode: No local models available; falling back to authorized cloud model.`,
+        reason: `BALANCED mode: No local models available; falling back to authorized cloud model '${cloudCandidate.id}'.`,
         requiresCloud: true,
         requiresApproval: false,
-        fallbackChain: [],
+        fallbackChain: cloudModels.filter((m) => m.id !== cloudCandidate.id).map((m) => m.id),
         estimatedCost: "Unknown",
       };
     }
@@ -301,15 +373,21 @@ export class WorkloadModelRouter {
     cloudModels: ModelDescriptor[],
     allowCloud: boolean
   ): RoutingDecision {
-    // Performance mode prefers highest reasoning capability (cloud if authorized)
+    // Performance mode prefers highest capability model (cloud if authorized)
     if (cloudModels.length > 0) {
-      const candidate = cloudModels[0];
-      const requiresApproval = !allowCloud;
+      const candidate =
+        cloudModels.find((m) =>
+          classification.requiredCapabilities.some((cap) => m.capabilities.includes(cap))
+        ) || cloudModels[0];
 
-      if (requiresApproval) {
-        // If cloud not authorized, check if user can fall back to local
+      if (!allowCloud) {
+        // If cloud not authorized, constrained to top local model
         if (localModels.length > 0) {
-          const localSelected = localModels[0];
+          const localSelected =
+            localModels.find((m) =>
+              classification.requiredCapabilities.some((cap) => m.capabilities.includes(cap))
+            ) || localModels[0];
+
           return {
             taskCategory: category,
             agentRole: role,
@@ -317,13 +395,14 @@ export class WorkloadModelRouter {
             modelId: localSelected.id,
             locality: "local",
             mode: "PERFORMANCE",
-            reason: `PERFORMANCE mode preferred cloud, but cloud is unauthorized; constrained to best local model.`,
+            reason: `PERFORMANCE mode preferred cloud, but cloud is unauthorized; constrained to best local model '${localSelected.id}'.`,
             requiresCloud: false,
             requiresApproval: false,
-            fallbackChain: [],
+            fallbackChain: localModels.filter((m) => m.id !== localSelected.id).map((m) => m.id),
             estimatedCost: "Free (Local)",
           };
         }
+
         throw new CloudAuthorizationRequiredError(
           candidate.id,
           candidate.providerId,
@@ -338,16 +417,23 @@ export class WorkloadModelRouter {
         modelId: candidate.id,
         locality: "remote",
         mode: "PERFORMANCE",
-        reason: `PERFORMANCE mode: Dispatched to premier model '${candidate.id}'.`,
+        reason: `PERFORMANCE mode: Dispatched to premier model '${candidate.id}' for highest capability.`,
         requiresCloud: true,
         requiresApproval: false,
-        fallbackChain: localModels.map((m) => m.id),
+        fallbackChain: [
+          ...cloudModels.filter((m) => m.id !== candidate.id).map((m) => m.id),
+          ...localModels.map((m) => m.id),
+        ],
         estimatedCost: "Unknown",
       };
     }
 
     if (localModels.length > 0) {
-      const selected = localModels[0];
+      const selected =
+        localModels.find((m) =>
+          classification.requiredCapabilities.some((cap) => m.capabilities.includes(cap))
+        ) || localModels[0];
+
       return {
         taskCategory: category,
         agentRole: role,
@@ -358,7 +444,7 @@ export class WorkloadModelRouter {
         reason: `PERFORMANCE mode: Using top local model '${selected.id}'.`,
         requiresCloud: false,
         requiresApproval: false,
-        fallbackChain: localModels.slice(1).map((m) => m.id),
+        fallbackChain: localModels.filter((m) => m.id !== selected.id).map((m) => m.id),
         estimatedCost: "Free (Local)",
       };
     }

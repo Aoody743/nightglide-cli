@@ -1,12 +1,14 @@
 import React from "react";
 import type { Theme } from "@nightglide/themes";
 import type { AgentStatus } from "@nightglide/core";
+import type { TerminalDimensions } from "../dimensions.js";
 
 export interface StatusBarProps {
   theme: Theme;
   workspacePath?: string;
   activeScreen?: string;
   status?: AgentStatus;
+  dimensions?: TerminalDimensions;
 }
 
 export function StatusBar({
@@ -14,12 +16,20 @@ export function StatusBar({
   workspacePath = process.cwd(),
   activeScreen = "welcome",
   status = "idle",
+  dimensions,
 }: StatusBarProps) {
-  // Shorten workspace path if home directory prefix matches
   const home = process.env.HOME || "";
   const displayPath = home && workspacePath.startsWith(home)
     ? "~" + workspacePath.slice(home.length)
     : workspacePath;
+
+  const isCompact = dimensions?.isCompactWidth ?? false;
+  const isUltraCompact = (dimensions?.width ?? 100) < 85;
+
+  // Truncate path if in compact mode
+  const formattedPath = isUltraCompact
+    ? displayPath.split("/").slice(-2).join("/")
+    : displayPath;
 
   return (
     <box
@@ -34,38 +44,50 @@ export function StatusBar({
       height={3}
     >
       {/* Navigation shortcuts */}
-      <box flexDirection="row" alignItems="center" gap={1}>
-        <text fg={theme.colors.accent}>[1]</text>
-        <text fg={theme.colors.textSecondary}>Welcome</text>
-        <text fg={theme.colors.border}>·</text>
-        <text fg={theme.colors.accent}>[2]</text>
-        <text fg={theme.colors.textSecondary}>Chat</text>
-        <text fg={theme.colors.border}>·</text>
-        <text fg={theme.colors.accent}>[3]</text>
-        <text fg={theme.colors.textSecondary}>Setup</text>
-        <text fg={theme.colors.border}>·</text>
-        <text fg={theme.colors.accent}>[4]</text>
-        <text fg={theme.colors.textSecondary}>Themes</text>
-        <text fg={theme.colors.border}>·</text>
-        <text fg={theme.colors.accent}>[5]</text>
-        <text fg={theme.colors.textSecondary}>Models</text>
-        <text fg={theme.colors.border}>·</text>
-        <text fg={theme.colors.error}>[Q]</text>
-        <text fg={theme.colors.textMuted}>Exit</text>
-      </box>
+      {isUltraCompact ? (
+        <box flexDirection="row" alignItems="center" gap={1}>
+          <text fg={theme.colors.accent}>[1-5]</text>
+          <text fg={theme.colors.textSecondary}>Tabs</text>
+          <text fg={theme.colors.border}>·</text>
+          <text fg={theme.colors.error}>[Q]</text>
+          <text fg={theme.colors.textMuted}>Exit</text>
+        </box>
+      ) : (
+        <box flexDirection="row" alignItems="center" gap={1}>
+          <text fg={theme.colors.accent}>[1]</text>
+          <text fg={theme.colors.textSecondary}>Home</text>
+          <text fg={theme.colors.border}>·</text>
+          <text fg={theme.colors.accent}>[2]</text>
+          <text fg={theme.colors.textSecondary}>Chat</text>
+          <text fg={theme.colors.border}>·</text>
+          <text fg={theme.colors.accent}>[3]</text>
+          <text fg={theme.colors.textSecondary}>Setup</text>
+          <text fg={theme.colors.border}>·</text>
+          <text fg={theme.colors.accent}>[4]</text>
+          <text fg={theme.colors.textSecondary}>Themes</text>
+          <text fg={theme.colors.border}>·</text>
+          <text fg={theme.colors.accent}>[5]</text>
+          <text fg={theme.colors.textSecondary}>Models</text>
+          <text fg={theme.colors.border}>·</text>
+          <text fg={theme.colors.error}>[Q]</text>
+          <text fg={theme.colors.textMuted}>Exit</text>
+        </box>
+      )}
 
       {/* Workspace indicator */}
       <box flexDirection="row" alignItems="center" gap={1}>
         <text fg={theme.colors.accentSecondary}>⌂</text>
-        <text fg={theme.colors.textSecondary}>{displayPath}</text>
+        <text fg={theme.colors.textSecondary}>{formattedPath}</text>
       </box>
 
       {/* Active Theme & Mode */}
-      <box flexDirection="row" alignItems="center" gap={1}>
-        <text fg={theme.colors.textMuted}>Theme:</text>
-        <text fg={theme.colors.accent}>{theme.name}</text>
-        <text fg={theme.colors.textMuted}>({theme.type})</text>
-      </box>
+      {!isUltraCompact && (
+        <box flexDirection="row" alignItems="center" gap={1}>
+          <text fg={theme.colors.textMuted}>Theme:</text>
+          <text fg={theme.colors.accent}>{theme.name}</text>
+          <text fg={theme.colors.textMuted}>({theme.type})</text>
+        </box>
+      )}
     </box>
   );
 }

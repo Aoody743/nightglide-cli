@@ -6,12 +6,19 @@ import {
   ConfigurationError,
 } from "@nightglide/core";
 import type { ProviderEndpointConfig } from "@nightglide/config";
-import { isValidEndpointUrl, resolveEndpointLocality } from "./locality.js";
+import {
+  isValidEndpointUrl,
+  resolveEndpointLocality,
+  normalizeEndpointUrl,
+  sanitizeUrlForDisplay,
+  sanitizeSecrets,
+} from "./locality.js";
 
 export interface RegisteredProvider {
   id: string;
   name: string;
   baseUrl: string;
+  originalBaseUrl?: string;
   locality: ProviderLocality;
   type: string;
   apiKey?: string;
@@ -59,19 +66,22 @@ export class ProviderRegistry {
     }
 
     if (!isValidEndpointUrl(config.baseUrl)) {
+      const sanitizedUrl = sanitizeUrlForDisplay(config.baseUrl);
       throw new ConfigurationError(
-        `Invalid endpoint URL '${config.baseUrl}' for provider '${trimmedId}'. Must be a valid http:// or https:// URL.`
+        `Invalid endpoint URL '${sanitizedUrl}' for provider '${trimmedId}'. Must be a valid http:// or https:// URL without embedded credentials.`
       );
     }
 
     // Physical endpoint locality calculation takes strict precedence over any config override
     const physicalLocality = resolveEndpointLocality(config.baseUrl);
+    const normalizedBaseUrl = normalizeEndpointUrl(config.baseUrl);
 
     const displayName = config.displayName?.trim() || `${trimmedId} (${physicalLocality})`;
     const provider: RegisteredProvider = {
       id: trimmedId,
       name: displayName,
-      baseUrl: config.baseUrl.trim().replace(/\/+$/, ""),
+      baseUrl: normalizedBaseUrl,
+      originalBaseUrl: config.baseUrl.trim().replace(/\/+$/, ""),
       locality: physicalLocality,
       type: config.type,
       apiKey: config.apiKey,
@@ -201,6 +211,11 @@ export class ProviderRegistry {
 
   /**
    * Probe network connectivity and authentication state of a provider endpoint.
+   * Enforces strict redirect security:
+   * - Prohibits cross-locality redirects (local endpoints must never silently redirect to remote destinations)
+   * - Prohibits SSRF redirects (remote endpoints redirecting to local loopback)
+   * - Prohibits protocol downgrade redirects (HTTPS to HTTP)
+   * - Handles authentication errors cleanly without credential leakage
    */
   async checkConnection(
     providerId: string,
@@ -219,33 +234,131 @@ export class ProviderRegistry {
 
     // Determine target probe URL
     const targetUrl = `${provider.baseUrl}/models`;
+    let currentUrl = targetUrl;
+    let redirectHops = 0;
+    const MAX_REDIRECTS = 3;
+
+    let timer: ReturnType<typeof setTimeout> | undefined;
 
     try {
       const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), timeoutMs);
+      timer = setTimeout(() => controller.abort(), timeoutMs);
 
-      const resp = await fetch(targetUrl, {
-        method: "GET",
-        headers,
-        signal: controller.signal,
-      });
-      clearTimeout(timer);
+      while (redirectHops <= MAX_REDIRECTS) {
+        const resp = await fetch(currentUrl, {
+          method: "GET",
+          headers,
+          signal: controller.signal,
+          redirect: "manual",
+        });
 
-      if (resp.status === 200) {
-        const result = {
-          connected: true,
-          status: 200,
-          message: "Service online and authenticated.",
-        };
-        provider.lastCheck = { ...result, checkedAt: Date.now() };
-        return result;
-      }
+        // Handle HTTP redirects (301, 302, 303, 307, 308)
+        if (resp.status >= 300 && resp.status < 400) {
+          const location = resp.headers.get("location");
+          if (!location) {
+            const result = {
+              connected: false,
+              status: resp.status,
+              message: `Endpoint returned HTTP ${resp.status} redirect without Location header.`,
+            };
+            provider.lastCheck = { ...result, checkedAt: Date.now() };
+            return result;
+          }
 
-      if (resp.status === 401 || resp.status === 403) {
+          let nextUrl: URL;
+          try {
+            nextUrl = new URL(location, currentUrl);
+          } catch {
+            const result = {
+              connected: false,
+              status: resp.status,
+              message: `Endpoint returned invalid redirect Location header.`,
+            };
+            provider.lastCheck = { ...result, checkedAt: Date.now() };
+            return result;
+          }
+
+          const nextLocality = resolveEndpointLocality(nextUrl.href);
+
+          // Security check 1: Local endpoint must NEVER silently redirect to remote destination!
+          if (provider.locality === "local" && nextLocality !== "local") {
+            const result = {
+              connected: false,
+              status: resp.status,
+              message: `Security violation: Local provider redirected to remote destination (${nextUrl.origin}). Cross-locality redirect blocked.`,
+            };
+            provider.lastCheck = { ...result, checkedAt: Date.now() };
+            return result;
+          }
+
+          // Security check 2: Remote endpoint must NEVER redirect to local loopback (SSRF protection)
+          if (provider.locality === "remote" && nextLocality === "local") {
+            const result = {
+              connected: false,
+              status: resp.status,
+              message: `Security violation: Remote provider redirected to local loopback destination (${nextUrl.origin}). Reverse cross-locality redirect blocked.`,
+            };
+            provider.lastCheck = { ...result, checkedAt: Date.now() };
+            return result;
+          }
+
+          // Security check 3: Prohibit HTTPS to HTTP downgrade
+          if (currentUrl.startsWith("https:") && nextUrl.protocol === "http:") {
+            const result = {
+              connected: false,
+              status: resp.status,
+              message: `Security violation: Insecure redirect from HTTPS to HTTP blocked.`,
+            };
+            provider.lastCheck = { ...result, checkedAt: Date.now() };
+            return result;
+          }
+
+          redirectHops++;
+          if (redirectHops > MAX_REDIRECTS) {
+            const result = {
+              connected: false,
+              status: resp.status,
+              message: `Too many redirects (exceeded limit of ${MAX_REDIRECTS}).`,
+            };
+            provider.lastCheck = { ...result, checkedAt: Date.now() };
+            return result;
+          }
+
+          // If redirect changes origin, strip Authorization header to prevent secret leakage
+          const currentOrigin = new URL(currentUrl).origin;
+          if (nextUrl.origin !== currentOrigin) {
+            delete headers["Authorization"];
+          }
+
+          currentUrl = nextUrl.href;
+          continue;
+        }
+
+        if (resp.status === 200) {
+          const result = {
+            connected: true,
+            status: 200,
+            message: "Service online and authenticated.",
+          };
+          provider.lastCheck = { ...result, checkedAt: Date.now() };
+          return result;
+        }
+
+        if (resp.status === 401 || resp.status === 403) {
+          const authHint = provider.apiKeyEnv ? `Set ${provider.apiKeyEnv}.` : "Set API key.";
+          const result = {
+            connected: false,
+            status: resp.status,
+            message: `Authentication required (HTTP ${resp.status}). ${authHint}`,
+          };
+          provider.lastCheck = { ...result, checkedAt: Date.now() };
+          return result;
+        }
+
         const result = {
           connected: false,
           status: resp.status,
-          message: `Authentication required (HTTP ${resp.status}). Set ${provider.apiKeyEnv || "API key"}.`,
+          message: `Endpoint returned HTTP ${resp.status}`,
         };
         provider.lastCheck = { ...result, checkedAt: Date.now() };
         return result;
@@ -253,20 +366,25 @@ export class ProviderRegistry {
 
       const result = {
         connected: false,
-        status: resp.status,
-        message: `Endpoint returned HTTP ${resp.status}`,
+        status: 0,
+        message: "Maximum redirects reached without terminal response.",
       };
       provider.lastCheck = { ...result, checkedAt: Date.now() };
       return result;
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
+      const safeMsg = sanitizeSecrets(msg, [apiKey]);
       const result = {
         connected: false,
         status: 0,
-        message: msg.includes("abort") ? "Connection timed out." : `Connection failed: ${msg}`,
+        message: safeMsg.includes("abort") ? "Connection timed out." : `Connection failed: ${safeMsg}`,
       };
       provider.lastCheck = { ...result, checkedAt: Date.now() };
       return result;
+    } finally {
+      if (timer) {
+        clearTimeout(timer);
+      }
     }
   }
 

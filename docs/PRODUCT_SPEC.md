@@ -196,10 +196,10 @@ flowchart TD
 ### FR-10: 工作负载感知模型智能路由 (`WorkloadModelRouter`)
 - **描述:** 依据任务意图、复杂度和严格的隐私合规要求，智能调度最适模型。
 - **4 类运行模式:**
-  - **`LOCAL`:** 绝对仅使用本地模型，底层硬件级拦截任何外网网络包，零代码泄露。
-  - **`BALANCED`:** 默认模式。简单检索/解释在本地运行；高复杂度规划在用户授权云端前提下流转至云端强模型。
-  - **`PERFORMANCE`:** 首选最高智商与推理能力的模型，严格在授权预算内运行。
-  - **`MANUAL`:** 用户针对 `MAIN`、`EXPLORE`、`PLAN`、`IMPLEMENT`、`REVIEW` 各角色显式指定的模型绝对生效。
+  - **`LOCAL`:** 纯离线隐私保护模式。仅使用本地回环端点模型，应用调度层确定性拦截任何未授权外网请求，确保数据不出机。
+  - **`BALANCED`:** 默认推荐模式。常规轻量检索/解释在本地端侧运行；高复杂度规划与评审任务在用户显式开启云端授权时协同云端强模型。
+  - **`PERFORMANCE`:** 性能优先模式。首选具备最高推理能力的模型，且必须严格在用户授权预算内运行。
+  - **`MANUAL`:** 手动模式。严格执行用户针对 `MAIN`、`EXPLORE`、`PLAN`、`IMPLEMENT`、`REVIEW` 各角色显式指定的模型，严禁任何未授权静默替换。
 
 ### FR-11: 本地与云端多智能体协同流水线 (Local + Cloud Agent Collaboration)
 - **描述:** 多 Agent 分工接力解决复杂开发任务。
@@ -300,11 +300,13 @@ quadrantChart
 - [x] `packages/engine`：隔离的 `OmpAgentEngine` 适配器（严格限制只读工具白名单）。
 - [x] `apps/cli`：OpenTUI 驱动的终端向导、免 Key 演示模式与 `doctor` 诊断工具。
 
-### 7.2 M1 及后续演进路线简述
-- **M1 (Usable Coding CLI):** 完整开放受审计的代码修改工具（`edit`, `write`）、语法着色 Diff 审查审批弹窗、本地 oMLX/Ollama 快速一键配对。
-- **M2 (Advanced Developer Experience):** 项目知识库索引、智能 Git 提交消息生成、跨会话状态持久化与快照还原。
-- **M3 (Multi-Agent Intelligence):** 编排主控（Main）、探索（Explore）、架构规划（Planner）与安全代码（Coding）多代理协作网。
-- **M4 (Public Release & Cross-Platform):** Homebrew/npm/独立二进制分发，跨平台自动化构建。
+### 7.2 里程碑演进路线规范 (Milestone Evolution)
+- **M0 (Engineering Foundation & UX):** 架构基石、Monorepo 搭建、OMP 上游隔离封装、苍穹设计系统与 OpenTUI 终端交互、免 Key 演示模式与诊断工具（已完成）。
+- **M1 (Multi-Provider Intelligence & Agent Collaboration):** 多提供商注册表、工作负载感知智能模型路由（LOCAL / BALANCED / PERFORMANCE / MANUAL）、本地与云端多 Agent 协同流水线、Agent Monitor 与 Model Assignment 矩阵（已完成）。
+- **M1.1 (Audit Remediation & Real Capability Verification):** 独立安全审计整改、0.0.0.0 与网络 Locality 严密判定、子智能体 Below-the-Prompt 权限隔离、MANUAL 模式零静默替换与强类型异常、WCAG AA 终端对比度全量合规、真实终端多尺寸验证与文档一致性矫正（当前基线）。
+- **M2 (Safe File Editing & Sandbox Workflows):** 受控代码修改工具（`edit`, `write`）、语法着色 Diff 审查与终端人机审批、Git Worktree 临时工作区沙箱与原子写盘。
+- **M3 (Advanced Developer Experience & Self-Healing):** 项目代码库全局上下文索引、智能 Git 提交与 PR 描述生成、编译/单测报错自愈修正循环。
+- **M4 (Public Distribution & Ecosystem):** 跨平台独立二进制打包分发、Homebrew/npm 一键安装、第三方能力与插件生态。
 
 ---
 

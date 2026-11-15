@@ -2,10 +2,12 @@
 
 > **"Build beyond the horizon." / "漫翔苍穹，构筑所想。"**  
 > *状态标识说明:*  
-> - `Implemented`: 核心代码已编写且通过全量自动化测试验证 (M0 / M1 阶段已完成)  
-> - `In Progress`: 正在开发中或正在进行下一阶段联调 (M1 验收 / M2 前期)  
-> - `Planned`: 已纳入里程碑规划，待后续版本开发 (M2 - M4)  
-> - `Research Required`: 依赖前沿架构探索或技术可行性预研 (预研阶段)
+> - `IMPLEMENTED`: 核心代码已编写并通过全量自动化测试验证 (M0 / M1 / M1.1 阶段已完成)  
+> - `SDK VERIFIED`: 真实 OMP SDK 运行时、SessionManager、Settings 与事件总线已实测验证  
+> - `LIVE VERIFIED`: 经由已配置的真实本地与云端模型端点执行实时推理与协同验证  
+> - `PARTIAL`: 功能已部分实现但尚存已知边界  
+> - `BLOCKED`: 外部依赖、物理端点或未提供凭据导致暂无法完成真实调用 (如真实多模型协同)  
+> - `PLANNED`: 已纳入后续里程碑规划 (M2 - M4)
 
 ---
 
@@ -53,8 +55,8 @@
 | `FEAT-ROUT-001` | 任务意图与复杂度分类器 | 支持 8 类任务类型 (`explore`, `explain`, `plan`, `implement`, `debug`, `review`, `test`, `summarize`)。 | 智能识别任务特征，为后续精准路由派发提供结构化输入。 | P0 | M1 | `FEAT-CORE-001` | 1. 准确识别中英文任务 Prompt；<br>2. 结构化输出能力需求与复杂度。 | **Implemented** |
 | `FEAT-ROUT-002` | 四大智能路由工作模式 | 实现 `LOCAL`、`BALANCED`、`PERFORMANCE`、`MANUAL` 策略矩阵。 | 满足不同安全合规与算力预算场景的需求。 | P0 | M1 | `FEAT-ROUT-001` | 1. LOCAL 模式绝对禁止云端；<br>2. BALANCED 模式复杂任务在授权时协同云端。 | **Implemented** |
 | `FEAT-ROUT-003` | 隐私敏感回退策略链 | Fallback 严格遵守当前路由模式与隐私约束，本地故障决不静默发往云端。 | 彻底杜绝数据在未经明确授权情况下的越权泄露。 | P0 | M1 | `FEAT-ROUT-002` | 1. LOCAL 回退链仅含本地模型；<br>2. 耗尽时抛出明确异常。 | **Implemented** |
-| `FEAT-ROUT-004` | 请求前底层硬件守卫 | 通过 OMP `assertDispatchModel` 钩子在发送网络包前拦截非合规请求。 | 即使 Prompt 注入或上游意外切换，也无法突破物理安全防线。 | P0 | M1 | `FEAT-ENG-002` | 1. 违规外发时抛出 `RoutingPolicyViolationError`；<br>2. 物理阻断连接建立。 | **Implemented** |
-| `FEAT-AGT-005` | 本地/云端跨模型协同工作流 | 实现本地 Explorer 扫码代码库 + 云端 Planner 制定架构方案的接力协同。 | 结合本地隐私零成本与云端高智商推理的最优解。 | P0 | M1 | `FEAT-ROUT-002` | 1. 本地生成摘要，最小必要上下文传云端；<br>2. 最终成果统一汇聚。 | **Implemented** |
+| `FEAT-ROUT-004` | 请求前调度层隐私守卫 | 通过 OMP `assertDispatchModel` 钩子在发送网络包前拦截非合规请求。 | 即使 Prompt 注入或上游意外切换，也无法突破调度层安全防线。 | P0 | M1 | `FEAT-ENG-002` | 1. 违规外发时抛出 `RoutingPolicyViolationError`；<br>2. 调度层阻断网络连接。 | **SDK VERIFIED** |
+| `FEAT-AGT-005` | 本地/云端跨模型协同工作流 | 实现本地 Explorer 扫码代码库 + 云端 Planner 制定架构方案的接力协同。 | 结合本地隐私零成本与云端高智商推理的最优解。 | P0 | M1 | `FEAT-ROUT-002` | 1. 本地生成摘要，最小必要上下文传云端；<br>2. 最终成果统一汇聚。 | **SDK VERIFIED (LIVE BLOCKED: 需要真实活跃双端点凭据)** |
 
 ---
 
@@ -77,7 +79,7 @@
 | :--- | :--- | :--- | :--- | :---: | :---: | :--- | :--- | :---: |
 | `FEAT-CFG-001` | 多 Provider 与路由配置结构 | 扩展 `NightglideConfig`，原生包含 `providers` 映射表与 `routing` 策略配置。 | 规范化持久化存储用户的所有模型偏好、角色绑定与云端开关。 | P0 | M1 | 无 | 1. 自动兼容旧版配置；<br>2. 结构自愈与校验。 | **Implemented** |
 | `FEAT-CFG-005` | 凭据安全提取与无明文 | 从环境变量（如 `OPENAI_API_KEY`）安全解析 Key，绝不在诊断或输出打印明文。 | 彻底杜绝用户误将包含密钥的配置文件提交到公共 Git 仓库。 | P0 | M0/M1 | `FEAT-CFG-001` | 1. 配置文件 Schema 默认不含明文 Key；<br>2. 日志脱敏保护。 | **Implemented** |
-| `FEAT-SEC-001` | 底层防篡改权限看门狗 | 在 SDK 调用与系统执行层之间构建硬件级别的确定性逻辑拦截层。 | 无论大模型如何被 Prompt 注入，均无法绕过物理权限门禁。 | P0 | M0 | `FEAT-CORE-003` | 1. 逻辑不可被模型指令改写；<br>2. 权限未命中时抛出强类型异常。 | **Implemented** |
+| `FEAT-SEC-001` | 底层防篡改权限看门狗 | 在 SDK 调用与系统执行层之间构建代码级确定性逻辑拦截层。 | 无论大模型如何被 Prompt 注入，均无法绕过确定性权限门禁。 | P0 | M0 | `FEAT-CORE-003` | 1. 逻辑不可被模型指令改写；<br>2. 权限未命中时抛出强类型异常。 | **SDK VERIFIED** |
 | `FEAT-SEC-004` | 敏感密钥脱敏展示 | 在日志输出、UI 调试面板与错误提示中，自动屏蔽敏感密钥。 | 防范截屏分享、录屏演示或日志上传时发生密钥无意泄露。 | P0 | M1 | `FEAT-MOD-004` | 1. 诊断接口仅返回 `hasAuth: true`；<br>2. 绝不在任何 public 字段打印 raw key。 | **Implemented** |
 
 ---

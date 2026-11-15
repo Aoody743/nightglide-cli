@@ -1,6 +1,7 @@
 import React, { useState, useCallback } from "react";
 import type { Theme } from "@nightglide/themes";
 import type { AgentStatus } from "@nightglide/core";
+import { useKeyboard } from "@opentui/react";
 
 export interface ComposerProps {
   theme: Theme;
@@ -38,6 +39,17 @@ export function Composer({
     status === "thinking" ||
     status === "streaming" ||
     status === "executing_tool";
+
+  // Handle Escape key to cancel flight or clear input
+  useKeyboard((key) => {
+    if (key.name === "escape") {
+      if (isBusy && onCancel) {
+        onCancel();
+      } else if (value.length > 0) {
+        setValue("");
+      }
+    }
+  });
 
   return (
     <box

@@ -133,6 +133,46 @@ describe("Cross-Provider Multi-Agent Collaboration", () => {
     await session.dispose();
   });
 
+  test("collaborative multi-agent workflow honors read-only mode and blocks mutating operations", async () => {
+    // 1. Verify in Mock Engine collaboration
+    const mockEngine = new MockAgentEngine({ stepDelayMs: 2, forceMultiAgent: true });
+    const session = await mockEngine.createSession({
+      workspacePath: process.cwd(),
+      routingMode: "BALANCED",
+      readOnly: true,
+      allowCloud: true,
+    });
+
+    const events: AgentEvent[] = [];
+    session.subscribe((evt) => events.push(evt));
+
+    await session.sendMessage("Analyze code and create plan without mutating workspace");
+
+    // Explorer subagent should complete and no mutating tools run
+    const subagentStarts = events.filter((e) => e.type === "subagent_start");
+    expect(subagentStarts.length).toBe(2);
+
+    const mutatingTools = ["write", "edit", "bash"];
+    const hasMutatingTool = events.some(
+      (e) => e.type === "tool_start" && mutatingTools.includes(e.toolName)
+    );
+    expect(hasMutatingTool).toBe(false);
+
+    await session.dispose();
+
+    // 2. Verify in real OMP isolated session
+    const ompEngine = new OmpAgentEngine();
+    const ompSession = await ompEngine.createSession({
+      workspacePath: process.cwd(),
+      readOnly: true,
+      routingMode: "LOCAL",
+      allowCloud: false,
+    });
+
+    expect((ompSession as any).readOnly).toBe(true);
+    await ompSession.dispose();
+  });
+
   test("opt-in real cross-provider execution test (skipped when providers unconfigured)", async () => {
     const hasRealCloudKey = Boolean(process.env.OPENAI_API_KEY || process.env.ANTHROPIC_API_KEY);
     const hasRealLocalKey = Boolean(process.env.OMLX_API_KEY || process.env.LOCAL_AI_API_KEY);

@@ -13,11 +13,12 @@ Nightglide 遵循精细化、高可靠性的阶段式演进策略。从底层隔
 flowchart LR
     M0["🚀 M0: 架构基石与首发体验\n(Foundation & UX)\n[已达成 ✓]"]
     M1["🧠 M1: 多模型协同与智能路由\n(Multi-Provider & Agents)\n[已完成 ✓]"]
+    M1_1["🛡️ M1.1: 审计整改与真实能力验证\n(Audit Remediation & QA)\n[已达成 ✓]"]
     M2["💻 M2: 受控代码编辑与安全沙箱\n(Safe File Editing & Sandbox)\n[核心目标: Diff审批与Worktree]"]
     M3["⚡ M3: 进阶开发者体验与自愈\n(Advanced Dev & Self-Healing)\n[核心目标: 上下文图谱与自愈]"]
     M4["🌍 M4: 全平台发布与生态\n(Public Release & Ecosystem)\n[核心目标: 独立二进制与插件]"]
 
-    M0 --> M1 --> M2 --> M3 --> M4
+    M0 --> M1 --> M1_1 --> M2 --> M3 --> M4
 ```
 
 ---
@@ -58,7 +59,7 @@ flowchart LR
    - 产出不可变强类型 `RoutingDecision`，含任务类型、分配角色、模型 ID、决策理由与预估成本。
    - 提供 `nightglide models` 查看模型清单与角色分配。
 4. **引擎升级与多智能体协作 (`@nightglide/engine`):**
-   - `OmpAgentEngine`: 接入原生 `task` 工具，注入 `Settings.isolated()` 角色覆盖，监听 `subagentEventBus` 并广播标准化事件，增加底层 `assertDispatchModel` 硬件级隐私守卫。
+   - `OmpAgentEngine`: 接入原生 `task` 工具，注入 `Settings.isolated()` 角色覆盖，监听 `subagentEventBus` 并广播标准化事件，增加底层 `assertDispatchModel` 调度层确定性隐私守卫。
    - `MockAgentEngine`: 增强多智能体协同仿真（本地 Explorer 扫描代码库 + 云端 Planner 编制规划 + 最终汇聚）。
 5. **TUI 界面升级 (`apps/cli/src/ui`):**
    - **Agent Monitor:** 多智能体协同监视卡片，实时呈现参与 Agent 角色、模型、LOCAL/CLOUD 标签、执行状态与 Token。
@@ -74,6 +75,32 @@ flowchart LR
 - [x] TUI Agent Monitor 正常展示活跃子智能体状态与标签。
 - [x] 全套测试通过（75 个单元与集成测试用例，涵盖 Provider、Routing、Engine、UI、CLI）。
 - [x] 编译期类型检查 `tsc --noEmit` 0 报错通过。
+
+---
+
+### 里程碑 M1.1: 审计整改与真实能力验证 (Audit Remediation & Real Capability Verification)
+- **核心定位:** 全面整改 M1 遗留的端点 Locality 判定、0.0.0.0 规范化、子智能体 Below-the-Prompt 权限隔离、MANUAL 模式零静默替换、WCAG 2.1 AA 终端对比度全量合规及真实终端尺寸响应。
+- **当前状态:** **已达成 (Completed ✓)**
+
+#### 交付清单与整改成果 (Deliverables)
+1. **网络位置与 0.0.0.0 规范化 (`@nightglide/providers`):**
+   - 严格区分服务端监听绑定 (`0.0.0.0`) 与客户端目标地址。
+   - 保留开发者本地端点 `0.0.0.0` 兼容性，客户端发起请求时安全规范化为 `127.0.0.1`。
+   - 严密防御 SSRF、私有内网 (RFC 1918)、链路本地、16进制/8进制/Dword 畸形 IP 与域名欺骗。
+   - `checkConnection` 实现手动重定向校验，严禁本地端点重定向至外部公网。
+2. **子智能体只读权限硬隔离 (`@nightglide/engine`):**
+   - 彻底封堵原生 OMP subagent 在只读模式下越权获取 `write`/`edit`/`bash` 的漏洞。
+   - 构建 Below-the-Prompt 四层安全防护：Task 工具拦截器、Settings 级工具阻断、运行时事件看门狗、物理 Locality 模型守卫。
+3. **工作负载智能路由确定性加固 (`@nightglide/routing`):**
+   - 根除 MANUAL 模式下的静默替换逻辑，未分配或模型不可用时抛出机器可读强类型异常。
+   - 完善中英文双语及混合 Prompt 分类，明确标记为规则型策略路由（Policy-Based Routing）。
+4. **终端无障碍与响应式升级 (`apps/cli/src/ui`, `@nightglide/themes`):**
+   - 4 款苍穹主题（Midnight Flight, Aurora, Cloudlight, Daybreak）文本对比度全量达到 WCAG 2.1 AA（$\ge 4.5:1$）。
+   - 输入框焦点隔离，彻底杜绝打字输入时意外触发单字符导航快捷键。
+   - 自适应终端尺寸分级（80x24 / 100x30 / 120x36+）与错误边界捕获。
+5. **全面质量保证与独立 QA:**
+   - 117 项自动化测试全量通过（0 失败，782 断言）。
+   - 独立 QA 子智能体全维度交叉审计通过。
 
 ---
 

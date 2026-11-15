@@ -14,9 +14,9 @@
 2. **多提供商中立与多模型协同 (Multi-Provider & Cross-Model Collaboration):**
    - 彻底打破单供应商绑定。通过 `@nightglide/providers` 支持本地端侧模型（oMLX, Ollama, LM Studio）与云端大模型（OpenAI, Anthropic, DeepSeek）并存。
    - 依托 `@nightglide/routing` 实现工作负载自适应路由（LOCAL, BALANCED, PERFORMANCE, MANUAL），协调轻量端侧模型与强推理云端模型高效接力。
-3. **物理网络位置绝对优先与隐私铁律 (Physical Locality & Zero Leakage):**
-   - 严禁轻信 Provider 名称；物理网络 Locality 严格依据解析后的网络端点地址（回环地址为 `local`，其余强制为 `remote`）。
-   - 在 `LOCAL` 模式下，底层硬件级守卫拦截任何未经授权的外网 HTTP 请求，从物理层面杜绝代码资产泄漏。
+3. **网络位置绝对判定与本地优先隐私守卫 (Endpoint Locality & Privacy-First Defense):**
+   - 严禁轻信 Provider 名称；网络 Locality 严格依据解析后的网络端点地址（回环地址为 `local`，其余强制为 `remote`）。
+   - 在 `LOCAL` 模式下，底层调度层守卫拦截任何未经授权的外网 HTTP 请求，从应用协议层确保未授权请求不发往外部云端。
 4. **抽象与确定性 (Deterministic Engine Abstraction):**
    - 表现层（TUI）仅依赖统一的抽象接口 `AgentEngine` 与 `AgentSession`。
    - 系统内置确定性 `MockAgentEngine`，使 UI 演示、快速验证与自动化单元测试无需依赖任何外部 AI 模型即可 100% 稳定运行。

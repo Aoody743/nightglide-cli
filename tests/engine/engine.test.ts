@@ -8,10 +8,15 @@ import {
   OmpAgentEngine,
   OmpAgentSession,
   DEFAULT_MOCK_GREETING_CHUNKS,
+  MUTATING_TOOL_NAMES,
+  READ_ONLY_PERMITTED_AGENTS,
+  createModelDispatchGuard,
 } from "@nightglide/engine";
 import {
   SessionDisposedError,
   ModelNotConfiguredError,
+  RoutingPolicyViolationError,
+  EngineError,
   type AgentEvent,
 } from "@nightglide/core";
 
@@ -369,6 +374,245 @@ describe("OmpAgentEngine & OmpAgentSession", () => {
       expect(session.getState().status).toBe("idle");
 
       await session.dispose();
+    } finally {
+      await fs.rm(tempAgentDir, { recursive: true, force: true });
+    }
+  }, 30000);
+
+  test("OmpAgentEngine enforces read-only mode below-the-prompt permission invariants", async () => {
+    const tempAgentDir = await fs.mkdtemp(path.join(os.tmpdir(), "nightglide-omp-ro-"));
+    const engine = new OmpAgentEngine({
+      defaultAgentDir: tempAgentDir,
+    });
+
+    try {
+      const session = (await engine.createSession({
+        workspacePath: testWorkspace,
+        readOnly: true,
+      })) as OmpAgentSession;
+
+      expect(session.readOnly).toBe(true);
+
+      const ompSession = (session as any).ompSession;
+      expect(ompSession).toBeDefined();
+
+      // 1. Verify task tool is wrapped and blocks unsafe mutating subagents
+      const taskTool = ompSession.getToolByName?.("task");
+      expect(taskTool).toBeDefined();
+
+      // Attempting to spawn mutating agents (reviewer, task, sonic) must throw EngineError
+      await expect(
+        taskTool.execute("tc_rev", { agent: "reviewer", task: "review patch" })
+      ).rejects.toThrow(EngineError);
+
+      await expect(
+        taskTool.execute("tc_task", { agent: "task", task: "write code" })
+      ).rejects.toThrow(EngineError);
+
+      await expect(
+        taskTool.execute("tc_sonic", { agent: "sonic", task: "apply changes" })
+      ).rejects.toThrow(EngineError);
+
+      // 2. Verify main session mutating tool execution start trips safety error
+      const receivedEvents: AgentEvent[] = [];
+      session.subscribe((evt) => receivedEvents.push(evt));
+
+      session.handleOmpEvent({
+        type: "tool_execution_start",
+        toolName: "write",
+        toolCallId: "call_mut_1",
+        args: { path: "exploit.sh", content: "rm -rf" },
+      });
+
+      expect(session.getState().status).toBe("error");
+      const writeErr = receivedEvents.find(
+        (e) => e.type === "error" && e.error.includes("write")
+      );
+      expect(writeErr).toBeDefined();
+
+      // 3. Verify subagent mutating tool execution start trips safety error and cancels
+      session.handleSubagentEvent({
+        id: "sub_rogue_1",
+        event: {
+          type: "tool_execution_start",
+          toolName: "bash",
+          toolCallId: "call_mut_2",
+        },
+      });
+
+      const bashErr = receivedEvents.find(
+        (e) => e.type === "error" && e.error.includes("bash")
+      );
+      expect(bashErr).toBeDefined();
+
+      await session.dispose();
+    } finally {
+      await fs.rm(tempAgentDir, { recursive: true, force: true });
+    }
+  }, 30000);
+
+  test("createModelDispatchGuard strictly enforces provider locality and blocks unauthorized cloud dispatch in LOCAL mode", () => {
+    // 1. LOCAL mode guard
+    const localGuard = createModelDispatchGuard({
+      workspacePath: testWorkspace,
+      routingMode: "LOCAL",
+      allowCloud: false,
+    });
+
+    // Cloud endpoint URL -> throws
+    expect(() =>
+      localGuard({ provider: "custom", id: "gpt-4o", baseUrl: "https://api.openai.com/v1" })
+    ).toThrow(RoutingPolicyViolationError);
+
+    // SSRF hex representation -> throws
+    expect(() =>
+      localGuard({ provider: "custom", id: "local-mod", baseUrl: "http://0x7f000001:8000" })
+    ).toThrow(RoutingPolicyViolationError);
+
+    // Loopback bypass domain -> throws
+    expect(() =>
+      localGuard({ provider: "custom", id: "local-mod", baseUrl: "http://127.example.com:8000" })
+    ).toThrow(RoutingPolicyViolationError);
+
+    // Cloud provider by name -> throws
+    expect(() =>
+      localGuard({ provider: "openai", id: "gpt-4o" })
+    ).toThrow(RoutingPolicyViolationError);
+
+    expect(() =>
+      localGuard({ provider: "anthropic", id: "claude-3-5-sonnet" })
+    ).toThrow(RoutingPolicyViolationError);
+
+    expect(() =>
+      localGuard({ provider: "google", id: "gemini-1.5-pro" })
+    ).toThrow(RoutingPolicyViolationError);
+
+    // Cloud selector prefix -> throws
+    expect(() =>
+      localGuard({ provider: "local", id: "openai/gpt-4o" })
+    ).toThrow(RoutingPolicyViolationError);
+
+    // Legitimate local provider and endpoint -> succeeds
+    expect(() =>
+      localGuard({
+        provider: "omlx",
+        id: "omlx/qwen2.5-coder-7b",
+        baseUrl: "http://127.0.0.1:8000/v1",
+      })
+    ).not.toThrow();
+
+    expect(() =>
+      localGuard({
+        provider: "ollama",
+        id: "ollama/llama3.2",
+        baseUrl: "http://localhost:11434/v1",
+      })
+    ).not.toThrow();
+
+    // 2. BALANCED mode with allowCloud: true allows cloud dispatch
+    const cloudGuard = createModelDispatchGuard({
+      workspacePath: testWorkspace,
+      routingMode: "BALANCED",
+      allowCloud: true,
+    });
+
+    expect(() =>
+      cloudGuard({ provider: "openai", id: "gpt-4o", baseUrl: "https://api.openai.com/v1" })
+    ).not.toThrow();
+  });
+
+  test("OmpAgentSession cancel terminates active subagents cleanly and transitions their status", async () => {
+    const tempAgentDir = await fs.mkdtemp(path.join(os.tmpdir(), "nightglide-omp-subcancel-"));
+    const engine = new OmpAgentEngine({
+      defaultAgentDir: tempAgentDir,
+    });
+
+    try {
+      const session = (await engine.createSession({
+        workspacePath: testWorkspace,
+      })) as OmpAgentSession;
+
+      const receivedEvents: AgentEvent[] = [];
+      session.subscribe((evt) => receivedEvents.push(evt));
+
+      // Simulate subagent spawning
+      session.handleSubagentEvent({
+        id: "sub_scout_42",
+        event: {
+          type: "agent_start",
+        },
+      });
+
+      // Verify subagent is active
+      const stateBefore = session.getState();
+      expect(stateBefore.activeSubagents?.length).toBe(1);
+      expect(stateBefore.activeSubagents?.[0].status).toBe("thinking");
+      expect(stateBefore.activeSubagents?.[0].id).toBe("sub_scout_42");
+
+      // Cancel session
+      await session.cancel();
+
+      // Verify session reset to idle
+      const stateAfter = session.getState();
+      expect(stateAfter.status).toBe("idle");
+
+      // Verify subagent transitioned to completed with endedAt
+      expect(stateAfter.activeSubagents?.[0].status).toBe("completed");
+      expect(stateAfter.activeSubagents?.[0].endedAt).toBeDefined();
+
+      // Verify subagent_end was emitted
+      const subagentEnd = receivedEvents.find(
+        (e) => e.type === "subagent_end" && e.subagentId === "sub_scout_42"
+      );
+      expect(subagentEnd).toBeDefined();
+
+      await session.dispose();
+    } finally {
+      await fs.rm(tempAgentDir, { recursive: true, force: true });
+    }
+  }, 30000);
+
+  test("OmpAgentSession dispose cleans up all listeners and subagents idempotently", async () => {
+    const tempAgentDir = await fs.mkdtemp(path.join(os.tmpdir(), "nightglide-omp-dispose-"));
+    const engine = new OmpAgentEngine({
+      defaultAgentDir: tempAgentDir,
+    });
+
+    try {
+      const session = (await engine.createSession({
+        workspacePath: testWorkspace,
+      })) as OmpAgentSession;
+
+      let eventCount = 0;
+      session.subscribe(() => {
+        eventCount++;
+      });
+
+      session.handleSubagentEvent({
+        id: "sub_active_99",
+        event: { type: "agent_start" },
+      });
+
+      await session.dispose();
+
+      const finalState = session.getState();
+      expect(finalState.isDisposed).toBe(true);
+      expect(finalState.status).toBe("idle");
+      expect(finalState.activeSubagents?.[0].status).toBe("completed");
+      expect(finalState.activeSubagents?.[0].endedAt).toBeDefined();
+
+      // Subsequent events after dispose are suppressed
+      session.handleOmpEvent({ type: "turn_start" });
+      expect(finalState.status).toBe("idle");
+
+      // Sending messages on disposed session throws SessionDisposedError
+      expect(session.sendMessage("Should be rejected")).rejects.toThrow(
+        SessionDisposedError
+      );
+
+      // Safe idempotent dispose
+      await session.dispose();
+      expect(session.getState().isDisposed).toBe(true);
     } finally {
       await fs.rm(tempAgentDir, { recursive: true, force: true });
     }

@@ -220,7 +220,8 @@ bun test
 # 3. 环境与上游 SDK 探针体检
 bun run doctor
 
-# 4. 独立二进制构建打包验证
+# 4. 客户端 JS Bundle 打包验证 (Dependent Bundle)
+# (注: 当前生成依赖 Bun 运行时与原生依赖的 dist/nightglide.js; 单一独立可执行二进制计划于 M4 发布)
 bun run build
 ```
 

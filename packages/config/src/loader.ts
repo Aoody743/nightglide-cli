@@ -92,10 +92,24 @@ export function validateConfig(raw: unknown): ValidationResult<NightglideConfig>
     }
   }
 
+  const rawFallbackAssignments = (rawRouting.fallbackAssignments && typeof rawRouting.fallbackAssignments === "object"
+    ? rawRouting.fallbackAssignments
+    : undefined) as Record<string, unknown> | undefined;
+  let fallbackAssignments: Partial<Record<AgentRole, string[]>> | undefined = undefined;
+  if (rawFallbackAssignments) {
+    fallbackAssignments = {};
+    for (const [r, list] of Object.entries(rawFallbackAssignments)) {
+      if (Array.isArray(list)) {
+        fallbackAssignments[r as AgentRole] = list.filter((item): item is string => typeof item === "string");
+      }
+    }
+  }
+
   const routing: RoutingConfig = {
     mode: routingMode,
     allowCloud: typeof rawRouting.allowCloud === "boolean" ? rawRouting.allowCloud : DEFAULT_CONFIG.routing.allowCloud,
     roleAssignments,
+    ...(fallbackAssignments ? { fallbackAssignments } : {}),
     maxConcurrency: typeof rawRouting.maxConcurrency === "number" ? rawRouting.maxConcurrency : DEFAULT_CONFIG.routing.maxConcurrency,
   };
 

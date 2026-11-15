@@ -53,6 +53,9 @@ describe("Configuration Package", () => {
           main: "cloud_openai/gpt-4o",
           explore: "local/qwen2.5-coder",
         },
+        fallbackAssignments: {
+          main: ["local/qwen2.5-coder"],
+        },
         maxConcurrency: 3,
       },
       permissions: {
@@ -69,6 +72,7 @@ describe("Configuration Package", () => {
     expect(res.data?.routing.mode).toBe("BALANCED");
     expect(res.data?.routing.allowCloud).toBe(true);
     expect(res.data?.routing.roleAssignments.main).toBe("cloud_openai/gpt-4o");
+    expect(res.data?.routing.fallbackAssignments?.main).toEqual(["local/qwen2.5-coder"]);
     expect(res.data?.routing.maxConcurrency).toBe(3);
   });
 

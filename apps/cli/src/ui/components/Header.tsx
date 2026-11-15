@@ -1,5 +1,6 @@
 import React from "react";
 import type { Theme } from "@nightglide/themes";
+import type { TerminalDimensions } from "../dimensions.js";
 
 export type ScreenId = "welcome" | "chat" | "setup" | "themes" | "models";
 
@@ -8,20 +9,22 @@ export interface HeaderProps {
   theme: Theme;
   model?: string;
   isMock?: boolean;
+  dimensions?: TerminalDimensions;
 }
 
 interface NavTab {
   id: ScreenId;
   key: string;
   label: string;
+  compactLabel: string;
 }
 
 const NAV_TABS: readonly NavTab[] = [
-  { id: "welcome", key: "1", label: "Welcome" },
-  { id: "chat", key: "2", label: "Flight Deck" },
-  { id: "setup", key: "3", label: "Setup" },
-  { id: "themes", key: "4", label: "Themes" },
-  { id: "models", key: "5", label: "Model Matrix" },
+  { id: "welcome", key: "1", label: "Welcome", compactLabel: "Home" },
+  { id: "chat", key: "2", label: "Flight Deck", compactLabel: "Chat" },
+  { id: "setup", key: "3", label: "Setup", compactLabel: "Setup" },
+  { id: "themes", key: "4", label: "Themes", compactLabel: "Themes" },
+  { id: "models", key: "5", label: "Model Matrix", compactLabel: "Models" },
 ] as const;
 
 export function Header({
@@ -29,8 +32,11 @@ export function Header({
   theme,
   model = "qwen2.5-coder:7b",
   isMock = false,
+  dimensions,
 }: HeaderProps) {
-  const engineLabel = isMock ? "Mock Engine" : model;
+  const engineLabel = isMock ? "Mock" : model.replace(":instruct", "");
+  const isCompact = dimensions?.isCompactWidth ?? false;
+  const isUltraCompact = (dimensions?.width ?? 100) < 85;
 
   return (
     <box
@@ -51,14 +57,19 @@ export function Header({
         {/* Brand Wordmark & Horizon Symbol */}
         <box flexDirection="row" alignItems="center" gap={1}>
           <text fg={theme.colors.accent}>✦ NIGHTGLIDE</text>
-          <text fg={theme.colors.border}>│</text>
-          <text fg={theme.colors.textMuted}>Celestial AI Flight</text>
+          {!isCompact && (
+            <>
+              <text fg={theme.colors.border}>│</text>
+              <text fg={theme.colors.textMuted}>Celestial AI Flight</text>
+            </>
+          )}
         </box>
 
         {/* Navigation Tabs */}
         <box flexDirection="row" alignItems="center" gap={1}>
           {NAV_TABS.map((tab) => {
             const isActive = activeScreen === tab.id;
+            const labelText = isCompact ? tab.compactLabel : tab.label;
             return (
               <box
                 key={tab.id}
@@ -68,7 +79,7 @@ export function Header({
                 <text
                   fg={isActive ? theme.colors.accent : theme.colors.textSecondary}
                 >
-                  [{tab.key}] {tab.label}
+                  [{tab.key}] {labelText}
                 </text>
               </box>
             );
@@ -86,14 +97,16 @@ export function Header({
               ◈ {engineLabel}
             </text>
           </box>
-          <box
-            paddingX={1}
-            backgroundColor={theme.colors.surfaceElevated}
-          >
-            <text fg={theme.colors.textMuted}>
-              ◐ {theme.name}
-            </text>
-          </box>
+          {!isUltraCompact && (
+            <box
+              paddingX={1}
+              backgroundColor={theme.colors.surfaceElevated}
+            >
+              <text fg={theme.colors.textMuted}>
+                ◐ {theme.name}
+              </text>
+            </box>
+          )}
         </box>
       </box>
     </box>

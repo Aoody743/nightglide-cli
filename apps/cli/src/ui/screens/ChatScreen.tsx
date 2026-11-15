@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import type { Theme } from "@nightglide/themes";
+import { useKeyboard } from "@opentui/react";
 import type {
   AgentEngine,
   AgentSession,
@@ -13,6 +14,7 @@ import { Composer } from "../components/Composer.js";
 import { AgentMonitor } from "../components/AgentMonitor.js";
 import { RoutingExplanation } from "../components/RoutingExplanation.js";
 import type { ScreenId } from "../components/Header.js";
+import type { TerminalDimensions } from "../dimensions.js";
 
 export interface ToolCallItem {
   id: string;
@@ -36,9 +38,10 @@ export interface ChatScreenProps {
   theme: Theme;
   engine?: AgentEngine;
   onNavigate?: (screen: ScreenId) => void;
+  dimensions?: TerminalDimensions;
 }
 
-export function ChatScreen({ theme, engine }: ChatScreenProps) {
+export function ChatScreen({ theme, engine, dimensions }: ChatScreenProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       id: "system-init",
@@ -310,8 +313,21 @@ export function ChatScreen({ theme, engine }: ChatScreenProps) {
     setStatusMessage("Flight halted by user.");
   }, []);
 
-  // Show latest 6 messages to prevent overflow in fixed terminal height
-  const visibleMessages = messages.slice(-6);
+  // Keyboard shortcut listener for ChatScreen
+  useKeyboard((key) => {
+    if (key.ctrl && key.name === "m") {
+      setShowMonitor((prev) => !prev);
+    } else if (key.name === "escape") {
+      if (status === "thinking" || status === "streaming" || status === "executing_tool") {
+        handleCancel();
+      }
+    }
+  });
+
+  // Calculate message count adaptively based on terminal height (e.g. 80x24, 100x30, 120x36)
+  const isCompact = dimensions?.isCompactHeight ?? false;
+  const maxMessages = isCompact ? 3 : (dimensions?.height ?? 30) < 34 ? 5 : 8;
+  const visibleMessages = messages.slice(-maxMessages);
 
   return (
     <box
@@ -348,7 +364,12 @@ export function ChatScreen({ theme, engine }: ChatScreenProps) {
         ) : null}
 
         {subagents.length > 0 ? (
-          <AgentMonitor theme={theme} subagents={subagents} isOpen={showMonitor} />
+          <AgentMonitor
+            theme={theme}
+            subagents={subagents}
+            isOpen={showMonitor}
+            maxVisible={isCompact ? 2 : undefined}
+          />
         ) : null}
 
         {visibleMessages.map((msg) => {

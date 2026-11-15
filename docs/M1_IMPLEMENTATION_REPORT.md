@@ -18,7 +18,7 @@ Nightglide M1 里程碑严格遵照 **“复用 OMP、扩展 Nightglide、不重
 2. **多提供商注册表 (`@nightglide/providers`):** 实现供应商解耦，支持 oMLX、Ollama、OpenAI、Anthropic 及自定义端点。严格基于回环 IP 进行物理 Locality 判定，提供安全的凭据提取与脱敏诊断。新增 `nightglide providers` 命令。
 3. **工作负载感知模型路由器 (`@nightglide/routing`):** 实现 8 类强类型任务分类（`explore`, `explain`, `plan`, `implement`, `debug`, `review`, `test`, `summarize`）与 4 大运行模式（`LOCAL`, `BALANCED`, `PERFORMANCE`, `MANUAL`）。提供端到端不可变 `RoutingDecision`。新增 `nightglide models` 命令。
 4. **引擎升级与跨 Provider 协同流水线 (`@nightglide/engine`):**
-   - `OmpAgentEngine`: 解锁原生 `task` 工具白名单，支持通过 `Settings.isolated()` 动态注入模型角色覆盖，无损捕获 `subagentEventBus` 并广播标准化事件，注册 `assertDispatchModel` 硬件级隐私门禁。
+   - `OmpAgentEngine`: 解锁原生 `task` 工具白名单，支持通过 `Settings.isolated()` 动态注入模型角色覆盖，无损捕获 `subagentEventBus` 并广播标准化事件，注册 `assertDispatchModel` 调度层确定性隐私门禁。
    - `MockAgentEngine`: 构建高保真确定性多 Agent 协同模拟器，完整复现“本地 Explorer 侦察代码 + 云端 Planner 编制规划 + 最终汇聚”的双工闭环。
 5. **OpenTUI 终端体验深度升级 (`apps/cli/src/ui`):**
    - **`AgentMonitor`:** 对话界面内嵌的多智能体监视卡片，实时呈现参与 Agent 角色、模型、LOCAL/CLOUD 标签、状态与 Token。

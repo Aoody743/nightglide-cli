@@ -88,3 +88,29 @@ export class CloudAuthorizationRequiredError extends SecurityPermissionError {
     this.providerId = providerId;
   }
 }
+
+export class ManualRoleNotAssignedError extends EngineError {
+  readonly role: string;
+
+  constructor(role: string, message = `MANUAL mode requires an explicit model assignment for role '${role}'.`) {
+    super(message, "MANUAL_ROLE_NOT_ASSIGNED", true);
+    this.name = "ManualRoleNotAssignedError";
+    this.role = role;
+  }
+}
+
+export class ModelCapabilityMismatchError extends EngineError {
+  readonly modelId: string;
+  readonly requiredCapabilities: readonly string[];
+
+  constructor(modelId: string, requiredCapabilities: readonly string[], message?: string) {
+    super(
+      message || `Model '${modelId}' does not satisfy required capabilities: ${requiredCapabilities.join(", ")}`,
+      "MODEL_CAPABILITY_MISMATCH",
+      true
+    );
+    this.name = "ModelCapabilityMismatchError";
+    this.modelId = modelId;
+    this.requiredCapabilities = requiredCapabilities;
+  }
+}

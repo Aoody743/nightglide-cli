@@ -23,6 +23,7 @@ export interface RoutingConfig {
   mode: RoutingMode;
   allowCloud: boolean;
   roleAssignments: Partial<Record<AgentRole, string>>;
+  fallbackAssignments?: Partial<Record<AgentRole, string[]>>;
   maxConcurrency?: number;
 }
 

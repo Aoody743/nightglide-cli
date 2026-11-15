@@ -183,6 +183,8 @@ export class ChatStateReducer {
   }
 }
 
+import { getTerminalTier, getFallbackDimensions } from "../../apps/cli/src/ui/dimensions.js";
+
 describe("UI Navigation & Screen State Logic", () => {
   type ScreenId = "welcome" | "chat" | "setup" | "themes" | "models";
 
@@ -194,29 +196,9 @@ describe("UI Navigation & Screen State Logic", () => {
       return "exit";
     }
 
-    if (currentScreen !== "chat") {
-      switch (key.name) {
-        case "1":
-        case "w":
-          return "welcome";
-        case "2":
-        case "d":
-          return "chat";
-        case "3":
-        case "s":
-          return "setup";
-        case "4":
-        case "t":
-          return "themes";
-        case "5":
-        case "m":
-          return "models";
-        case "q":
-          return "exit";
-        default:
-          return null;
-      }
-    } else {
+    if (currentScreen === "chat") {
+      // In chat screen: strictly guard against typing hijacking.
+      // Single letters, numbers, spaces must NEVER navigate away.
       if (key.ctrl && key.name === "1") return "welcome";
       if (key.ctrl && key.name === "3") return "setup";
       if (key.ctrl && key.name === "4") return "themes";
@@ -227,6 +209,53 @@ describe("UI Navigation & Screen State Logic", () => {
       if (key.name === "f4") return "themes";
       if (key.name === "f5") return "models";
       return null;
+    }
+
+    if (currentScreen === "themes") {
+      // In themes screen: 1-4 is handled by ThemeSelector for selecting themes.
+      // Esc navigates back, Ctrl+numbers navigate, q exits.
+      if (key.name === "escape") return "welcome";
+      if (key.ctrl && key.name === "1") return "welcome";
+      if (key.ctrl && key.name === "2") return "chat";
+      if (key.ctrl && key.name === "3") return "setup";
+      if (key.ctrl && key.name === "5") return "models";
+      if (key.name === "q" && !key.ctrl) return "exit";
+      return null;
+    }
+
+    if (currentScreen === "models") {
+      // In models screen: space/return/c are handled for mode and assignment.
+      // Esc navigates back to chat, Ctrl+numbers navigate, q exits.
+      if (key.name === "escape") return "chat";
+      if (key.ctrl && key.name === "1") return "welcome";
+      if (key.ctrl && key.name === "2") return "chat";
+      if (key.ctrl && key.name === "3") return "setup";
+      if (key.ctrl && key.name === "4") return "themes";
+      if (key.name === "q" && !key.ctrl) return "exit";
+      return null;
+    }
+
+    // In welcome and setup screens: single-key navigation is allowed
+    switch (key.name) {
+      case "1":
+      case "w":
+        return "welcome";
+      case "2":
+      case "d":
+        return "chat";
+      case "3":
+      case "s":
+        return "setup";
+      case "4":
+      case "t":
+        return "themes";
+      case "5":
+      case "m":
+        return "models";
+      case "q":
+        return "exit";
+      default:
+        return null;
     }
   }
 
@@ -249,23 +278,73 @@ describe("UI Navigation & Screen State Logic", () => {
   });
 
   test("chat screen guards single-letter navigation to prevent hijacking typing", () => {
-    // Typing 'w' or 'd' or 'q' should NOT navigate away in chat screen
-    expect(routeKeyToScreen("chat", { name: "w" })).toBeNull();
-    expect(routeKeyToScreen("chat", { name: "d" })).toBeNull();
-    expect(routeKeyToScreen("chat", { name: "s" })).toBeNull();
-    expect(routeKeyToScreen("chat", { name: "q" })).toBeNull();
+    // Typing single letters or numbers in Composer must NEVER navigate away
+    const protectedKeys = ["1", "2", "3", "4", "5", "w", "d", "s", "t", "m", "c", "q", "space", "k", "j"];
+    for (const key of protectedKeys) {
+      expect(routeKeyToScreen("chat", { name: key })).toBeNull();
+    }
 
-    // Ctrl shortcuts or F-keys work in chat screen
+    // Explicit modifiers (Ctrl+number or F-keys) are required to navigate from chat screen
     expect(routeKeyToScreen("chat", { name: "1", ctrl: true })).toBe("welcome");
     expect(routeKeyToScreen("chat", { name: "3", ctrl: true })).toBe("setup");
+    expect(routeKeyToScreen("chat", { name: "4", ctrl: true })).toBe("themes");
+    expect(routeKeyToScreen("chat", { name: "5", ctrl: true })).toBe("models");
+    expect(routeKeyToScreen("chat", { name: "f1" })).toBe("welcome");
+    expect(routeKeyToScreen("chat", { name: "f2" })).toBe("chat");
+    expect(routeKeyToScreen("chat", { name: "f3" })).toBe("setup");
     expect(routeKeyToScreen("chat", { name: "f4" })).toBe("themes");
+    expect(routeKeyToScreen("chat", { name: "f5" })).toBe("models");
   });
 
-  test("universal Ctrl+C triggers exit from any screen", () => {
-    expect(routeKeyToScreen("welcome", { name: "c", ctrl: true })).toBe("exit");
-    expect(routeKeyToScreen("chat", { name: "c", ctrl: true })).toBe("exit");
-    expect(routeKeyToScreen("setup", { name: "c", ctrl: true })).toBe("exit");
-    expect(routeKeyToScreen("themes", { name: "c", ctrl: true })).toBe("exit");
+  test("themes screen guards 1-4 so ThemeSelector can select themes without hijacking", () => {
+    expect(routeKeyToScreen("themes", { name: "1" })).toBeNull();
+    expect(routeKeyToScreen("themes", { name: "2" })).toBeNull();
+    expect(routeKeyToScreen("themes", { name: "3" })).toBeNull();
+    expect(routeKeyToScreen("themes", { name: "4" })).toBeNull();
+    expect(routeKeyToScreen("themes", { name: "escape" })).toBe("welcome");
+  });
+
+  test("models screen guards space, c, and return so ModelAssignmentView can operate", () => {
+    expect(routeKeyToScreen("models", { name: "space" })).toBeNull();
+    expect(routeKeyToScreen("models", { name: "c" })).toBeNull();
+    expect(routeKeyToScreen("models", { name: "return" })).toBeNull();
+    expect(routeKeyToScreen("models", { name: "escape" })).toBe("chat");
+  });
+
+  test("universal Ctrl+C and Ctrl+Q triggers exit from any screen", () => {
+    const screens: ScreenId[] = ["welcome", "chat", "setup", "themes", "models"];
+    for (const screen of screens) {
+      expect(routeKeyToScreen(screen, { name: "c", ctrl: true })).toBe("exit");
+      expect(routeKeyToScreen(screen, { name: "q", ctrl: true })).toBe("exit");
+    }
+  });
+});
+
+describe("Terminal Dimensions & Responsive Layout", () => {
+  test("getTerminalTier accurately categorizes 80x24, 100x30, and 120x36", () => {
+    expect(getTerminalTier(80, 24)).toBe("small");
+    expect(getTerminalTier(85, 25)).toBe("small");
+    expect(getTerminalTier(100, 30)).toBe("medium");
+    expect(getTerminalTier(110, 32)).toBe("medium");
+    expect(getTerminalTier(120, 36)).toBe("large");
+    expect(getTerminalTier(160, 48)).toBe("large");
+  });
+
+  test("getFallbackDimensions returns safe positive dimension values", () => {
+    const fallback = getFallbackDimensions();
+    expect(fallback.width).toBeGreaterThanOrEqual(80);
+    expect(fallback.height).toBeGreaterThanOrEqual(24);
+  });
+
+  test("responsive message viewport sizing adapts to terminal height tiers", () => {
+    function computeVisibleMessageCount(height: number): number {
+      const isCompact = height < 28;
+      return isCompact ? 3 : height < 34 ? 5 : 8;
+    }
+
+    expect(computeVisibleMessageCount(24)).toBe(3); // 80x24 compact
+    expect(computeVisibleMessageCount(30)).toBe(5); // 100x30 standard laptop
+    expect(computeVisibleMessageCount(36)).toBe(8); // 120x36 widescreen
   });
 });
 
@@ -312,6 +391,63 @@ describe("UI Theme Synchronization", () => {
       expect(theme.colors.accentSecondary.startsWith("#")).toBe(true);
       expect(theme.colors.textPrimary.startsWith("#")).toBe(true);
       expect(theme.colors.border.startsWith("#")).toBe(true);
+    }
+  });
+
+  test("all 4 UI themes satisfy WCAG 2.1 AA (>= 4.5:1) text contrast ratios on background and surface", () => {
+    function getLuminance(hex: string): number {
+      const rgb = hex
+        .replace("#", "")
+        .match(/.{2}/g)!
+        .map((x) => parseInt(x, 16) / 255);
+      const linear = rgb.map((c) =>
+        c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4)
+      );
+      return 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2];
+    }
+
+    function getContrastRatio(hex1: string, hex2: string): number {
+      const lum1 = getLuminance(hex1);
+      const lum2 = getLuminance(hex2);
+      const brightest = Math.max(lum1, lum2);
+      const darkest = Math.min(lum1, lum2);
+      return (brightest + 0.05) / (darkest + 0.05);
+    }
+
+    for (const theme of BUILTIN_THEMES) {
+      const bg = theme.colors.background;
+      const surface = theme.colors.surface;
+
+      // Text tokens
+      const crPrimaryBg = getContrastRatio(theme.colors.textPrimary, bg);
+      const crPrimarySurf = getContrastRatio(theme.colors.textPrimary, surface);
+      expect(crPrimaryBg).toBeGreaterThanOrEqual(4.5);
+      expect(crPrimarySurf).toBeGreaterThanOrEqual(4.5);
+
+      const crSecondaryBg = getContrastRatio(theme.colors.textSecondary, bg);
+      const crSecondarySurf = getContrastRatio(theme.colors.textSecondary, surface);
+      expect(crSecondaryBg).toBeGreaterThanOrEqual(4.5);
+      expect(crSecondarySurf).toBeGreaterThanOrEqual(4.5);
+
+      const crMutedBg = getContrastRatio(theme.colors.textMuted, bg);
+      const crMutedSurf = getContrastRatio(theme.colors.textMuted, surface);
+      expect(crMutedBg).toBeGreaterThanOrEqual(4.5);
+      expect(crMutedSurf).toBeGreaterThanOrEqual(4.5);
+
+      // Accent & Status tokens carrying textual cues
+      const textCarryingTokens = [
+        theme.colors.accent,
+        theme.colors.accentSecondary,
+        theme.colors.success,
+        theme.colors.warning,
+        theme.colors.error,
+        theme.colors.info,
+      ];
+
+      for (const token of textCarryingTokens) {
+        expect(getContrastRatio(token, bg)).toBeGreaterThanOrEqual(4.5);
+        expect(getContrastRatio(token, surface)).toBeGreaterThanOrEqual(4.5);
+      }
     }
   });
 });

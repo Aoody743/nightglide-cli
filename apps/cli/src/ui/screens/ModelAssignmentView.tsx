@@ -4,10 +4,12 @@ import { loadConfig, saveConfig, type NightglideConfig } from "@nightglide/confi
 import type { AgentRole, RoutingMode } from "@nightglide/core";
 import { useKeyboard } from "@opentui/react";
 import type { ScreenId } from "../components/Header.js";
+import type { TerminalDimensions } from "../dimensions.js";
 
 export interface ModelAssignmentViewProps {
   theme: Theme;
   onNavigate?: (screen: ScreenId) => void;
+  dimensions?: TerminalDimensions;
 }
 
 const ROLES: Array<{ role: AgentRole; label: string; desc: string }> = [
@@ -21,7 +23,15 @@ const ROLES: Array<{ role: AgentRole; label: string; desc: string }> = [
 
 const MODES: RoutingMode[] = ["LOCAL", "BALANCED", "PERFORMANCE", "MANUAL"];
 
-export function ModelAssignmentView({ theme, onNavigate }: ModelAssignmentViewProps) {
+const ROLE_MODEL_OPTIONS: string[] = [
+  "", // Auto-routed
+  "omlx/qwen2.5-coder:7b",
+  "openai/gpt-4o",
+  "anthropic/claude-3-5-sonnet",
+  "deepseek/deepseek-coder",
+];
+
+export function ModelAssignmentView({ theme, onNavigate, dimensions }: ModelAssignmentViewProps) {
   const [config, setConfig] = useState<NightglideConfig | null>(null);
   const [selectedIndex, setSelectedIndex] = useState<number>(0);
   const [savedStatus, setSavedStatus] = useState<string>("");
@@ -64,13 +74,41 @@ export function ModelAssignmentView({ theme, onNavigate }: ModelAssignmentViewPr
     });
   }, [config]);
 
+  const handleCycleRoleModel = useCallback(() => {
+    if (!config) return;
+    const selectedRole = ROLES[selectedIndex].role;
+    const currentAssignment = config.routing.roleAssignments[selectedRole] || "";
+    const currentIndex = ROLE_MODEL_OPTIONS.indexOf(currentAssignment);
+    const nextIndex = (currentIndex + 1) % ROLE_MODEL_OPTIONS.length;
+    const nextModel = ROLE_MODEL_OPTIONS[nextIndex];
+
+    const updated: NightglideConfig = {
+      ...config,
+      routing: {
+        ...config.routing,
+        roleAssignments: {
+          ...config.routing.roleAssignments,
+          [selectedRole]: nextModel,
+        },
+      },
+    };
+    setConfig(updated);
+    saveConfig(updated).then(() => {
+      const label = nextModel ? nextModel : "Auto-routed";
+      setSavedStatus(`Role [${ROLES[selectedIndex].label}] assigned to: ${label}`);
+      setTimeout(() => setSavedStatus(""), 2000);
+    });
+  }, [config, selectedIndex]);
+
   useKeyboard((key) => {
     if (key.name === "up" || key.name === "k") {
       setSelectedIndex((prev) => Math.max(0, prev - 1));
     } else if (key.name === "down" || key.name === "j") {
       setSelectedIndex((prev) => Math.min(ROLES.length - 1, prev + 1));
-    } else if (key.name === "space" || key.name === "return") {
+    } else if (key.name === "space") {
       handleCycleMode();
+    } else if (key.name === "return") {
+      handleCycleRoleModel();
     } else if (key.name === "c") {
       handleToggleCloud();
     } else if (key.name === "escape" && onNavigate) {
@@ -106,7 +144,9 @@ export function ModelAssignmentView({ theme, onNavigate }: ModelAssignmentViewPr
         {savedStatus ? (
           <text fg={theme.colors.success}>✔ {savedStatus}</text>
         ) : (
-          <text fg={theme.colors.textMuted}>[Space: Cycle Mode | C: Toggle Cloud | Esc: Back]</text>
+          <text fg={theme.colors.textMuted}>
+            [Space: Mode | Enter: Model | C: Cloud | Esc: Back]
+          </text>
         )}
       </box>
 
