@@ -20,7 +20,7 @@ export type ModelCapability =
  * Provider-qualified model descriptor.
  */
 export interface ModelDescriptor {
-  readonly id: string; // e.g. "omlx/qwen2.5-coder-7b" or "openai/gpt-4o"
+  readonly id: string; // e.g. "omlx/endless" or "openai/gpt-4o"
   readonly name: string;
   readonly providerId: string;
   readonly locality: ProviderLocality;

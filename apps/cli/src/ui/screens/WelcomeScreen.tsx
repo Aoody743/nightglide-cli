@@ -1,5 +1,5 @@
 import React from "react";
-import type { Theme } from "@nightglide/themes";
+import type { Theme, UIMetaphor } from "@nightglide/themes";
 import type { ScreenId } from "../components/Header.js";
 import type { TerminalDimensions } from "../dimensions.js";
 
@@ -10,15 +10,42 @@ export interface WelcomeScreenProps {
   model?: string;
   isMock?: boolean;
   dimensions?: TerminalDimensions;
+  metaphor?: UIMetaphor;
 }
+
+/**
+ * 6-line high-contrast, bold ANSI block font for Nightglide banner.
+ * Exactly 75 columns wide, solid thickness, no thin/broken glyphs.
+ */
+const BOLD_BANNER_LINES: readonly string[] = [
+  "███╗   ██╗██╗ ██████╗ ██╗  ██╗████████╗ ██████╗ ██╗     ██╗██████╗ ███████╗",
+  "████╗  ██║██║██╔════╝ ██║  ██║╚══██╔══╝██╔════╝ ██║     ██║██╔══██╗██╔════╝",
+  "██╔██╗ ██║██║██║  ███╗███████║   ██║   ██║  ███╗██║     ██║██║  ██║█████╗  ",
+  "██║╚██╗██║██║██║   ██║██╔══██║   ██║   ██║   ██║██║     ██║██║  ██║██╔══╝  ",
+  "██║ ╚████║██║╚██████╔╝██║  ██║   ██║   ╚██████╔╝███████╗██║██████╔╝███████╗",
+  "╚═╝  ╚═══╝╚═╝ ╚═════╝ ╚═╝  ╚═╝   ╚═╝    ╚═════╝ ╚══════╝╚═╝╚═════╝ ╚══════╝",
+] as const;
+
+/**
+ * Compact 5-line standard font for narrower terminals (60-79 columns).
+ * Exactly 55 columns wide.
+ */
+const COMPACT_BANNER_LINES: readonly string[] = [
+  " _   _ ___ ____ _   _ _____ ____ _     ___ ____  _____ ",
+  "| \\ | |_ _/ ___| | | |_   _/ ___| |   |_ _|  _ \\| ____|",
+  "|  \\| || | |  _| |_| | | || |  _| |    | || | | |  _|  ",
+  "| |\\  || | |_| |  _  | | || |_| | |___ | || |_| | |___ ",
+  "|_| \\_|___\\____|_| |_| |_| \\____|_____|___|____/|_____|",
+] as const;
 
 export function WelcomeScreen({
   theme,
   onNavigate,
   workspacePath = process.cwd(),
-  model = "qwen2.5-coder:7b",
+  model = "omlx/endless",
   isMock = false,
   dimensions,
+  metaphor = "flight-deck",
 }: WelcomeScreenProps) {
   const home = process.env.HOME || "";
   const displayPath =
@@ -26,7 +53,14 @@ export function WelcomeScreen({
       ? "~" + workspacePath.slice(home.length)
       : workspacePath;
 
-  const isCompact = dimensions?.isCompactHeight ?? false;
+  const isCompactHeight = dimensions?.isCompactHeight ?? false;
+  const terminalWidth = dimensions?.width ?? 80;
+  const isAbyss = metaphor === "abyss-dive";
+
+  // Use bold 75-column banner when terminal width >= 80 and not ultra-compact
+  const showBoldBanner = terminalWidth >= 80 && !isCompactHeight;
+  // Use 55-column banner for medium widths (60 - 79)
+  const showMediumBanner = !showBoldBanner && terminalWidth >= 60 && !isCompactHeight;
 
   return (
     <box
@@ -34,49 +68,69 @@ export function WelcomeScreen({
       width="100%"
       height="100%"
       backgroundColor={theme.colors.background}
-      paddingX={dimensions?.isCompactWidth ? 1 : 3}
-      paddingY={isCompact ? 0 : 1}
+      paddingX={terminalWidth < 84 ? 1 : 2}
+      paddingY={isCompactHeight ? 0 : 1}
       gap={1}
     >
-      {/* Celestial Horizon Banner */}
+      {/* Dynamic Celestial Horizon or Abyss Bulkhead Banner */}
       <box
         flexDirection="column"
         alignItems="center"
         justifyContent="center"
-        paddingY={isCompact ? 0 : 1}
+        paddingY={isCompactHeight ? 0 : 1}
         borderColor={theme.colors.border}
-        borderStyle="single"
+        borderStyle={isAbyss ? "double" : "single"}
         backgroundColor={theme.colors.surface}
       >
-        {isCompact ? (
+        {isCompactHeight || (!showBoldBanner && !showMediumBanner) ? (
           <box flexDirection="column" alignItems="center">
             <text fg={theme.colors.accent}>
-              ✦ NIGHTGLIDE · Build beyond the horizon ✦
+              {isAbyss
+                ? "◎ ABYSS DIVE · Subsea Cockpit Online ◎"
+                : "✦ NIGHTGLIDE · Build beyond the horizon ✦"}
             </text>
             <text fg={theme.colors.textMuted}>
-              漫翔苍穹，构筑所想。
+              {isAbyss ? "深潜深渊，探赜索隐。" : "漫翔苍穹，构筑所想。"}
             </text>
           </box>
         ) : (
           <>
+            {/* Ambient telemetry line */}
             <text fg={theme.colors.accentSecondary}>
-              ✦   *      ·         ★         ·      *   ✦
+              {isAbyss
+                ? "✦   ~      ≈         ◎   A B Y S S   D E E P   D I V E   ◎         ≈      ~   ✦"
+                : "✦   *      ·         ★   C E L E S T I A L   F L I G H T   ★         ·      *   ✦"}
             </text>
-            <text fg={theme.colors.accent}>
-              _  _ _ ____ _  _ ___ ____ _    _ ___  ____
-            </text>
-            <text fg={theme.colors.accent}>
-              |\ | | | __ |--|  |  |__, |___ | |__] |===
-            </text>
+
+            {/* Bold, thick, majestic Nightglide ASCII / Block Art */}
+            {showBoldBanner &&
+              BOLD_BANNER_LINES.map((line, idx) => (
+                <text key={`bold-logo-${idx}`} fg={theme.colors.accent}>
+                  {line}
+                </text>
+              ))}
+
+            {showMediumBanner &&
+              COMPACT_BANNER_LINES.map((line, idx) => (
+                <text key={`med-logo-${idx}`} fg={theme.colors.accent}>
+                  {line}
+                </text>
+              ))}
+
             <text fg={theme.colors.accentSecondary}>
-              ·      ★         ✦  N I G H T G L I D E  ✦         ★      ·
+              {isAbyss
+                ? "·      ≈         ✦  N I G H T G L I D E  ·  A B Y S S  ✦         ≈      ·"
+                : "·      ★         ✦  N I G H T G L I D E  ✦         ★      ·"}
             </text>
+
             <box marginTop={1} flexDirection="column" alignItems="center">
               <text fg={theme.colors.textPrimary}>
-                Build beyond the horizon.
+                {isAbyss
+                  ? "Subsea Abyss Cockpit · Deep Dive into the Mariana Trench"
+                  : "Build beyond the horizon."}
               </text>
               <text fg={theme.colors.textMuted}>
-                漫翔苍穹，构筑所想。
+                {isAbyss ? "深潜深渊，探赜索隐。" : "漫翔苍穹，构筑所想。"}
               </text>
             </box>
           </>
@@ -88,18 +142,22 @@ export function WelcomeScreen({
         flexDirection="column"
         backgroundColor={theme.colors.surface}
         borderColor={theme.colors.border}
-        borderStyle="single"
+        borderStyle={isAbyss ? "double" : "single"}
         paddingX={2}
         paddingY={1}
         gap={1}
       >
         <box flexDirection="row" justifyContent="space-between">
           <box flexDirection="row" gap={1}>
-            <text fg={theme.colors.accent}>WORKSPACE:</text>
+            <text fg={theme.colors.accent}>
+              {isAbyss ? "DIVE BASE:" : "WORKSPACE:"}
+            </text>
             <text fg={theme.colors.textPrimary}>{displayPath}</text>
           </box>
           <box flexDirection="row" gap={1}>
-            <text fg={theme.colors.accentSecondary}>ENGINE:</text>
+            <text fg={theme.colors.accentSecondary}>
+              {isAbyss ? "HYDRO ENGINE:" : "ENGINE:"}
+            </text>
             <text fg={theme.colors.textPrimary}>
               {isMock ? "Mock Engine (Deterministic)" : "OMP Adapter (Live)"}
             </text>
@@ -111,7 +169,9 @@ export function WelcomeScreen({
             <text fg={theme.colors.textPrimary}>{model}</text>
           </box>
           <box flexDirection="row" gap={1}>
-            <text fg={theme.colors.textMuted}>THEME:</text>
+            <text fg={theme.colors.textMuted}>
+              {isAbyss ? "OCEANIC PALETTE:" : "THEME:"}
+            </text>
             <text fg={theme.colors.accent}>
               {theme.name} ({theme.type})
             </text>
@@ -131,9 +191,13 @@ export function WelcomeScreen({
           paddingX={2}
           paddingY={1}
         >
-          <text fg={theme.colors.accent}>[2] Flight Deck (Chat)</text>
+          <text fg={theme.colors.accent}>
+            {isAbyss ? "[2] Abyss Cockpit (Chat)" : "[2] Flight Deck (Chat)"}
+          </text>
           <text fg={theme.colors.textSecondary}>
-            Enter the interactive coding console. Stream assistant responses, invoke native tools, and collaborate with subagents.
+            {isAbyss
+              ? "Deep dive coding console. Sonar acoustic telemetry, diff inspection, and subsea agent delegation."
+              : "Enter the interactive coding console. Stream assistant responses, invoke native tools, and collaborate with subagents."}
           </text>
         </box>
 
@@ -147,9 +211,9 @@ export function WelcomeScreen({
           paddingX={2}
           paddingY={1}
         >
-          <text fg={theme.colors.accentSecondary}>[3] Setup</text>
+          <text fg={theme.colors.accentSecondary}>[3] Setup & Auth</text>
           <text fg={theme.colors.textSecondary}>
-            Configure local Apple Silicon inference (oMLX/Ollama) or secure cloud providers (Claude, GPT, DeepSeek).
+            Official subscription login (Codex, Copilot, Claude) or custom API key configuration.
           </text>
         </box>
 
@@ -163,9 +227,9 @@ export function WelcomeScreen({
           paddingX={2}
           paddingY={1}
         >
-          <text fg={theme.colors.textPrimary}>[4] Celestial Themes</text>
+          <text fg={theme.colors.textPrimary}>[4] Themes & Cockpit</text>
           <text fg={theme.colors.textSecondary}>
-            Switch atmospheric palettes: Midnight Flight, Aurora, Cloudlight, Daybreak.
+            Switch atmospheric palettes: 6 Celestial & Abyss Deep Dive Themes.
           </text>
         </box>
 
@@ -194,10 +258,12 @@ export function WelcomeScreen({
         paddingX={1}
       >
         <text fg={theme.colors.textMuted}>
-          "Where local intelligence meets unbounded flight."
+          {isAbyss
+            ? "\"Deep below the surface, intelligence runs silent and undisturbed.\""
+            : "\"Where local intelligence meets unbounded flight.\""}
         </text>
         <text fg={theme.colors.textMuted}>
-          Press [1-5] to navigate, [Tab] for Mode, or [Q] to return to terminal
+          [1-5] Navigate · [Ctrl+U] Toggle Submarine/Flight · [Q] Exit
         </text>
       </box>
     </box>

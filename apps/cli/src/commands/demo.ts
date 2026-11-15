@@ -22,7 +22,7 @@ export async function runDemoCommand(options: { nonInteractive?: boolean } = {})
       routingMode: "BALANCED",
       allowCloud: true,
       roleModelOverrides: {
-        explore: "omlx/qwen2.5-coder-7b",
+        explore: "omlx/endless",
         plan: "openai/gpt-4o",
       },
     });

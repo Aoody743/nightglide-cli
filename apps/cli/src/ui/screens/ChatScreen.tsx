@@ -716,7 +716,7 @@ export function ChatScreen({
       <AgentStatus
         status={status}
         theme={theme}
-        model="qwen2.5-coder:7b"
+        model={model ?? "omlx/endless"}
         statusMessage={statusMessage}
         activeTool={activeTool}
       />

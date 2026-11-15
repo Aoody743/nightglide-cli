@@ -25,7 +25,7 @@ const MODES: RoutingMode[] = ["LOCAL", "BALANCED", "PERFORMANCE", "MANUAL"];
 
 const ROLE_MODEL_OPTIONS: string[] = [
   "", // Auto-routed
-  "omlx/qwen2.5-coder:7b",
+  "omlx/endless",
   "openai/gpt-4o",
   "anthropic/claude-3-5-sonnet",
   "deepseek/deepseek-coder",

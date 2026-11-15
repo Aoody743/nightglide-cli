@@ -288,7 +288,7 @@ export class MockAgentSession implements AgentSession {
     this.setStatus("thinking", "Nightglide Task Director analyzing task and dispatching workers...");
     await waitStep(this.stepDelayMs);
 
-    const exploreModel = this.sessionOptions.roleModelOverrides?.explore || "omlx/qwen2.5-coder-7b";
+    const exploreModel = this.sessionOptions.roleModelOverrides?.explore || "omlx/endless";
     const planModel = this.sessionOptions.roleModelOverrides?.plan || "openai/gpt-4o";
 
     const routingDecision: RoutingDecision = {

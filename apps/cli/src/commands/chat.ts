@@ -65,6 +65,7 @@ export async function runChatCommand(options: ChatCommandOptions = {}): Promise<
         initialScreen: options.initialScreen || "welcome",
         engine,
         onExit,
+        model: config.model,
       })
     );
   } catch (err) {

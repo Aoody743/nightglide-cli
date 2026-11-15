@@ -21,6 +21,7 @@ export interface AppProps {
   initialInteractionMode?: InteractionMode;
   initialMetaphor?: UIMetaphor;
   metaphor?: UIMetaphor;
+  model?: string;
 }
 
 /**
@@ -81,10 +82,14 @@ export function App({
   initialInteractionMode,
   initialMetaphor,
   metaphor: propMetaphor,
+  model: propModel,
 }: AppProps) {
   const themeManager = getThemeManager();
   const [theme, setTheme] = useState<Theme>(() => themeManager.getActiveTheme());
   const [activeScreen, setActiveScreen] = useState<ScreenId>(initialScreen);
+  const [activeModel, setActiveModel] = useState<string>(
+    () => propModel ?? "omlx/endless"
+  );
   const [interactionMode, setInteractionMode] = useState<InteractionMode>(
     initialInteractionMode ?? "guided"
   );
@@ -95,18 +100,19 @@ export function App({
   // Responsive dimensions with fallback for 80x24, 100x30, 120x36
   const dimensions: TerminalDimensions = useResponsiveTerminalDimensions(overrideDimensions);
 
-  // Load configured interaction mode on mount if not explicitly supplied
+  // Load configured interaction mode and active model on mount
   useEffect(() => {
-    if (!initialInteractionMode) {
-      loadConfig()
-        .then((cfg) => {
-          if (cfg.interactionMode) {
-            setInteractionMode(cfg.interactionMode);
-          }
-        })
-        .catch(() => {});
-    }
-  }, [initialInteractionMode]);
+    loadConfig()
+      .then((cfg) => {
+        if (cfg.interactionMode && !initialInteractionMode) {
+          setInteractionMode(cfg.interactionMode);
+        }
+        if (cfg.model && !propModel) {
+          setActiveModel(cfg.model);
+        }
+      })
+      .catch(() => {});
+  }, [initialInteractionMode, propModel]);
 
   // Subscribe to global theme changes and sync metaphor
   useEffect(() => {
@@ -270,7 +276,7 @@ export function App({
         <Header
           activeScreen={activeScreen}
           theme={theme}
-          model="qwen2.5-coder:7b"
+          model={activeModel}
           isMock={engine?.isMock ?? false}
           dimensions={dimensions}
           metaphor={metaphor}
@@ -283,9 +289,10 @@ export function App({
               theme={theme}
               onNavigate={setActiveScreen}
               workspacePath={workspacePath}
-              model="qwen2.5-coder:7b"
+              model={activeModel}
               isMock={engine?.isMock ?? false}
               dimensions={dimensions}
+              metaphor={metaphor}
             />
           )}
 
@@ -299,6 +306,7 @@ export function App({
               onToggleInteractionMode={handleToggleInteractionMode}
               onSetInteractionMode={handleSetInteractionMode}
               workspacePath={workspacePath}
+              model={activeModel}
             />
           )}
 

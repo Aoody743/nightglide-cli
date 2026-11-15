@@ -108,7 +108,7 @@ export function getGitBranch(cwd: string = process.cwd()): string {
  * Formats model identifier with locality pill representation and authentic vendor mini glyph.
  */
 export function formatModelPill(
-  model: string = "qwen2.5-coder:7b",
+  model: string = "omlx/endless",
   isMock: boolean = false,
   includeVendorGlyph: boolean = false
 ): string {
@@ -139,7 +139,7 @@ export interface ModelBadgeInfo {
  * Formats full model badge including vendor metadata and brand color styling.
  */
 export function formatModelBadge(
-  model: string = "qwen2.5-coder:7b",
+  model: string = "omlx/endless",
   isMock: boolean = false
 ): ModelBadgeInfo {
   const vendor = resolveProviderVendor(isMock ? "mock" : model);
@@ -192,7 +192,7 @@ export function formatHeaderTelemetry(
 export function Header({
   activeScreen,
   theme,
-  model = "qwen2.5-coder:7b",
+  model = "omlx/endless",
   isMock = false,
   dimensions,
   workspacePath = process.cwd(),
