@@ -1,0 +1,26 @@
+{
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ESNext", "DOM"],
+    "strict": true,
+    "skipLibCheck": true,
+    "jsx": "react-jsx",
+    "jsxImportSource": "@opentui/react",
+    "declaration": true,
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "paths": {
+      "@nightglide/core": ["./packages/core/src/index.ts"],
+      "@nightglide/config": ["./packages/config/src/index.ts"],
+      "@nightglide/themes": ["./packages/themes/src/index.ts"],
+      "@nightglide/engine": ["./packages/engine/src/index.ts"]
+    }
+  },
+  "include": [
+    "packages/*/src/**/*",
+    "apps/*/src/**/*",
+    "tests/**/*"
+  ]
+}

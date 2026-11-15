@@ -1,0 +1,24 @@
+{
+  "name": "nightglide",
+  "version": "0.1.0",
+  "type": "module",
+  "bin": {
+    "nightglide": "./src/index.ts"
+  },
+  "scripts": {
+    "dev": "bun run src/index.ts",
+    "demo": "bun run src/index.ts demo",
+    "doctor": "bun run src/index.ts doctor",
+    "build": "bun build src/index.ts --target bun --outfile dist/nightglide",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@nightglide/core": "workspace:*",
+    "@nightglide/config": "workspace:*",
+    "@nightglide/engine": "workspace:*",
+    "@nightglide/themes": "workspace:*",
+    "@opentui/core": "0.9.0",
+    "@opentui/react": "0.9.0",
+    "react": "^19.3.0"
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "name": "@nightglide/engine",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@nightglide/core": "workspace:*",
+    "@oh-my-pi/pi-coding-agent": "18.20.2"
+  }
+}
