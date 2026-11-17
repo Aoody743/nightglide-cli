@@ -1,5 +1,7 @@
 # Nightglide M1 阶段实施与验收总结报告 (M1 IMPLEMENTATION REPORT)
 
+> **历史原型记录。** 此文的完成状态不代表新主线已经实现或验证，参见 [新路线图](ROADMAP.md)。
+
 **项目名称：** Nightglide  
 **里程碑：** M1 — 多模型协同与工作负载智能路由 (Multi-Provider Intelligence & Agent Collaboration)  
 **实施环境：** Google Antigravity + Gemini 3.8 Flash + Subagents  

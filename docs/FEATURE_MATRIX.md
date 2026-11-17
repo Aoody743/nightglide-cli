@@ -1,5 +1,7 @@
 # Nightglide 全量功能特性矩阵 (FEATURE MATRIX)
 
+> **历史原型记录。** 下方状态不代表 OMP 新主线已接入或验证，以 [新路线图](ROADMAP.md) 为准。
+
 > **"Build beyond the horizon." / "漫翔苍穹，构筑所想。"**  
 > *状态标识说明:*  
 > - `IMPLEMENTED`: 核心代码已编写并通过全量自动化测试验证 (M0 / M1 / M1.1 / M1.2 阶段已完成)  

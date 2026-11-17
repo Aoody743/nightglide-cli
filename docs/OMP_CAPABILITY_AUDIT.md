@@ -1,5 +1,7 @@
 # OMP SDK 原生能力审计报告 (Capability Audit)
 
+> **历史报告，不代表当前新主线验收。** 其中关于完整接入、审批、隐私路由和真实跨提供商推理的结论尚未由 Nightglide 端到端验证；以 [新路线图](ROADMAP.md) 和 [OMP 基线](OMP_BASELINE.md) 为准。
+
 **测试与审查环境：**
 - **OMP SDK 版本：** `@oh-my-pi/pi-coding-agent: 18.20.2`
 - **底层依赖组件：**

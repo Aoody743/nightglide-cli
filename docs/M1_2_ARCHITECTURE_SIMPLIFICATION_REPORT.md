@@ -1,4 +1,6 @@
 # NIGHTGLIDE M1.2 架构精简与原生 OMP 能力恢复报告
+
+> **历史原型记录。** 对能力、审批和隐私保障的描述尚需在新主线重新验证；以 [新路线图](ROADMAP.md) 为准。
 **M1.2 Architecture Simplification & Native OMP Restoration Report**
 
 ---

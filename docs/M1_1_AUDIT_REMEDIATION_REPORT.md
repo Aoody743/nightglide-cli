@@ -1,5 +1,7 @@
 # Nightglide M1.1 阶段综合审计整改与真实能力验证报告 (M1.1 AUDIT REMEDIATION REPORT)
 
+> **历史原型记录。** 此文的完成状态不代表新主线已经实现或验证，参见 [新路线图](ROADMAP.md)。
+
 **项目名称：** Nightglide  
 **里程碑版本：** M1.1 — 审计整改、安全隔离验证与真实能力测试 (Audit Remediation & Real Capability Verification)  
 **实施环境：** Google Antigravity + Gemini 3.8 Flash + Multi-Subagent Engineering  
