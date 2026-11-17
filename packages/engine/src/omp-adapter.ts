@@ -874,28 +874,40 @@ export class OmpAgentEngine implements AgentEngine {
     const baseUrl = this.options.baseUrl || "http://127.0.0.1:8000/v1";
     const apiKey = process.env.OMLX_API_KEY || "sk-local";
     try {
+      const targetModel = options.model ?? this.options.model ?? this.options.defaultModel;
+      const cleanTargetId = targetModel ? targetModel.replace(/^omlx\//, "") : undefined;
+      const registeredModels = [
+        {
+          id: "endless",
+          name: "endless",
+          reasoning: true,
+          supportsTools: true,
+          contextWindow: 262144,
+        },
+      ];
+      if (cleanTargetId && cleanTargetId !== "endless") {
+        registeredModels.push({
+          id: cleanTargetId,
+          name: cleanTargetId,
+          reasoning: true,
+          supportsTools: true,
+          contextWindow: 262144,
+        });
+      }
+
       reg.registerProvider("omlx", {
-        api: "openai-chat",
+        api: "openai-completions",
         baseUrl,
         apiKey,
-        models: [
-          {
-            id: "endless",
-            name: "endless",
-            reasoning: true,
-            supportsTools: true,
-            contextWindow: 262144,
-          },
-        ],
+        models: registeredModels,
       });
-    const targetModel = options.model ?? this.options.model ?? this.options.defaultModel;
-    if (!sessionResult.session.model && targetModel) {
-      const cleanId = targetModel.replace(/^omlx\//, "");
-      const found = reg.find("omlx", cleanId);
-      if (found) {
-        await sessionResult.session.setModel(found);
+      if (!sessionResult.session.model && targetModel) {
+        const cleanId = targetModel.replace(/^omlx\//, "");
+        const found = reg.find("omlx", cleanId);
+        if (found) {
+          await sessionResult.session.setModel(found);
+        }
       }
-    }
     } catch {
       // Safe fallback
     }
@@ -1010,7 +1022,7 @@ export class OmpAgentEngine implements AgentEngine {
         const apiKey = process.env.OMLX_API_KEY || "sk-local";
         try {
           reg.registerProvider("omlx", {
-            api: "openai-chat",
+            api: "openai-completions",
             baseUrl,
             apiKey,
             models: [
