@@ -1,6 +1,7 @@
 /**
- * Nightglide 阶段 1：主对话工作台终端视觉与交互验收脚本
- * 覆盖 80x24, 100x30, 120x36 尺寸与双主题（夜航 Flight / 深潜 Abyss）
+ * Nightglide 工作台终端视觉与交互验收脚本
+ * 覆盖 80x24, 100x30, 120x36 尺寸与五套主题
+ * （夜航 Flight / 深潜 Abyss / 极光 Aurora / 云光 Cloudlight / 晨曦 Daybreak）
  */
 import { WelcomeComponent } from "../vendor/omp/packages/tui/src/prompt/welcome";
 import { setThemeInstance, theme } from "../vendor/omp/packages/tui/src/theme/theme";
@@ -22,9 +23,16 @@ function stripAnsi(str: string): string {
   return Bun.stripANSI(str);
 }
 
-function renderMockTimeline(width: number, isAbyss: boolean): string[] {
-  const accent = isAbyss ? "#62e2cb" : "#b5b6ff";
-  const dim = isAbyss ? "#537378" : "#6c7693";
+/** 各主题「进行中」工具卡片的动效文案，反映各自的动效身份。 */
+const RUNNING_META: Record<string, string> = {
+  flight: "━╾─ 正在滑行检索...",
+  abyss: "● 正在检索深海符号...",
+  aurora: "≈✦ 极光涟漪检索中...",
+  cloudlight: "░▒▓ 云影漂移检索中...",
+  daybreak: "◎ 晨光晕染检索中...",
+};
+
+function renderMockTimeline(width: number, themeId: string): string[] {
 
   // 用户消息气泡
   const userHead = theme.bold(theme.fg("text", "你  ")) + theme.fg("text", "帮我检查登录流程，并解释发现的问题。");
@@ -53,7 +61,7 @@ function renderMockTimeline(width: number, isAbyss: boolean): string[] {
   // 正在进行的工具
   const searchToolBlock = renderOutputBlock({
     header: "search  login / refresh token",
-    headerMeta: isAbyss ? "● 正在检索深海符号..." : "━╾─ 正在滑行检索...",
+    headerMeta: RUNNING_META[themeId.replace("nightglide-", "")] ?? RUNNING_META.flight,
     state: "running",
     width: Math.min(width - 4, 76),
     sections: [
@@ -82,7 +90,7 @@ function renderMockTimeline(width: number, isAbyss: boolean): string[] {
   ];
 }
 
-function renderMockApproval(width: number, isAbyss: boolean): string[] {
+function renderMockApproval(width: number): string[] {
   const approvalBlock = renderOutputBlock({
     header: "⚠ 工具执行审批: 写入文件",
     headerMeta: "需要确认操作",
@@ -117,7 +125,6 @@ function renderWorkbenchScreen(
 ): ViewportSnapshot {
   const t = loadThemeSync(themeId);
   setThemeInstance(t);
-  const isAbyss = themeId.includes("abyss");
 
   const welcome = new WelcomeComponent("18.20.2");
   const welcomeLines = welcome.render(width);
@@ -127,9 +134,9 @@ function renderWorkbenchScreen(
     // 空会话状态：整洁干净的留白
     middleLines = [];
   } else if (mode === "active-dialogue") {
-    middleLines = renderMockTimeline(width, isAbyss);
+    middleLines = renderMockTimeline(width, themeId);
   } else if (mode === "approval") {
-    middleLines = renderMockApproval(width, isAbyss);
+    middleLines = renderMockApproval(width);
   }
 
   // 底部输入区与状态栏
@@ -187,7 +194,13 @@ const targets = [
   { width: 120, height: 36, label: "120x36 (Expanded Target)" },
 ];
 
-for (const themeId of ["nightglide-flight", "nightglide-abyss"]) {
+for (const themeId of [
+  "nightglide-flight",
+  "nightglide-abyss",
+  "nightglide-aurora",
+  "nightglide-cloudlight",
+  "nightglide-daybreak",
+]) {
   console.log(`\n======================================================`);
   console.log(`  THEME: ${themeId.toUpperCase()}`);
   console.log(`======================================================`);
