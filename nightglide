@@ -1,5 +1,28 @@
 #!/usr/bin/env sh
-DIR="$(cd "$(dirname "$0")" && pwd)"
+# Nightglide launcher: runs the vendored OMP source CLI.
+#
+# Mirrors upstream's scripts/omp dev launcher: Bun reads bunfig.toml from the
+# *current* directory at startup (foreign preloads would execute inside
+# Nightglide), and `bun --cwd` would leave the vendored source directory as
+# the process cwd — making getProjectDir() resolve sessions and project files
+# to vendor/omp instead of the user's working directory. So: remember the
+# real cwd in OMP_LAUNCH_CWD, cd to a bunfig-free directory, and let the
+# upstream preload shim (scripts/omp.ts) restore the cwd before imports run.
+set -e
+
+DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)"
+CLI="$DIR/vendor/omp/packages/coding-agent/src/cli.ts"
+PRELOAD="$DIR/vendor/omp/packages/coding-agent/scripts/omp.ts"
+
+[ -f "$CLI" ] || { echo "nightglide: $CLI not found; run 'git submodule update --init --recursive' and 'bun install' first." >&2; exit 1; }
+
 export PI_RAW_BIN="nightglide"
 export OMP_APP_NAME="nightglide"
-exec bun --cwd="$DIR/vendor/omp/packages/coding-agent" src/cli.ts "$@"
+
+LAUNCH_DIR="${OMP_DEV_LAUNCH_DIR:-${HOME}/.omp/.dev-cwd}"
+[ -d "$LAUNCH_DIR" ] || mkdir -p "$LAUNCH_DIR"
+
+OMP_LAUNCH_CWD=$PWD
+export OMP_LAUNCH_CWD
+cd "$LAUNCH_DIR"
+exec bun --preload "$PRELOAD" "$CLI" "$@"
