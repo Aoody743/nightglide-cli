@@ -1,5 +1,7 @@
 # Nightglide 苍穹设计系统规范 (DESIGN SYSTEM)
 
+
+> **历史原型记录。** 本文描述已退役的 OpenTUI 原型架构，其中的技术方案、完成度与结论不适用于 OMP 原生新主线；现状以 [新路线图](ROADMAP.md) 与 [验收记录](STAGE_2_3_VERIFICATION.md) 为准。本文仅作设计思想与历史参考。
 > **"Build beyond the horizon." / "漫翔苍穹，构筑所想。"**  
 > *设计系统代号: Celestial Flight (苍穹夜翔) | 终端渲染基座: OpenTUI React (v0.9.0)*  
 > *文档版本: v2.0.0 (M1.2 Native OMP 基准演进规范) | 适用范围: 全端 UI 组件、主题与终端表现层*

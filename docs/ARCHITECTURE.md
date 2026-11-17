@@ -1,5 +1,7 @@
 # Nightglide 系统架构设计文档 (ARCHITECTURE)
 
+
+> **历史原型记录。** 本文描述已退役的 OpenTUI 原型架构，其中的技术方案、完成度与结论不适用于 OMP 原生新主线；现状以 [新路线图](ROADMAP.md) 与 [验收记录](STAGE_2_3_VERIFICATION.md) 为准。本文仅作设计思想与历史参考。
 > **"Build beyond the horizon." / "漫翔苍穹，构筑所想。"**
 
 本文档详细阐述 Nightglide 的系统总体架构、模块分层边界、与上游 Oh My Pi (OMP) SDK 的轻量适配架构、多提供商注册表、工作负载感知模型路由（Workload-Aware Model Router）、本地与云端智能体协同流转模型（Local + Cloud Collaboration）、会话生命周期管理以及与原生 OMP 的清晰职责划分。

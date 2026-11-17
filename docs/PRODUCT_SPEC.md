@@ -1,5 +1,7 @@
 # Nightglide 产品详细规范 (PRODUCT SPECIFICATION)
 
+
+> **历史原型记录。** 本文描述已退役的 OpenTUI 原型架构，其中的技术方案、完成度与结论不适用于 OMP 原生新主线；现状以 [新路线图](ROADMAP.md) 与 [验收记录](STAGE_2_3_VERIFICATION.md) 为准。本文仅作设计思想与历史参考。
 > **"Build beyond the horizon." / "漫翔苍穹，构筑所想。"**  
 > *文档版本: v1.0.0 | 状态: 官方技术基准规范 | 适用范围: 全平台客户端与引擎*
 

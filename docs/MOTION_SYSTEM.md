@@ -1,5 +1,7 @@
 # Nightglide 苍穹动效系统规范 (MOTION SYSTEM)
 
+
+> **历史原型记录。** 本文描述已退役的 OpenTUI 原型架构，其中的技术方案、完成度与结论不适用于 OMP 原生新主线；现状以 [新路线图](ROADMAP.md) 与 [验收记录](STAGE_2_3_VERIFICATION.md) 为准。本文仅作设计思想与历史参考。
 > **"Build beyond the horizon." / "漫翔苍穹，构筑所想。"**  
 > *动效系统代号: Celestial Kinetics (苍穹动力学) | 终端渲染基座: OpenTUI React (v0.9.0)*  
 > *文档版本: v1.0.0 (基准官方规范) | 适用范围: 终端 UI 动画、微交互与过渡管线*

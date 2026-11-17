@@ -1,5 +1,7 @@
 # Nightglide M1 智能工作负载与模型路由技术规范 (M1 Agent Routing Spec)
 
+
+> **历史原型记录。** 本文描述已退役的 OpenTUI 原型架构，其中的技术方案、完成度与结论不适用于 OMP 原生新主线；现状以 [新路线图](ROADMAP.md) 与 [验收记录](STAGE_2_3_VERIFICATION.md) 为准。本文仅作设计思想与历史参考。
 **版本：** 1.1.0 (M1.1 Audit Remediation)  
 **模块命名空间：** `@nightglide/routing`, `@nightglide/config`, `@nightglide/providers`  
 **语言规范：** 简体中文 (核心类型标识与代码接口遵循英文技术标识)  

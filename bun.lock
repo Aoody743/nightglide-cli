@@ -27,6 +27,8 @@
         "@nightglide/config": "workspace:*",
         "@nightglide/core": "workspace:*",
         "@nightglide/engine": "workspace:*",
+        "@nightglide/providers": "workspace:*",
+        "@nightglide/routing": "workspace:*",
         "@nightglide/themes": "workspace:*",
         "@opentui/core": "0.9.0",
         "@opentui/react": "0.9.0",
@@ -45,8 +47,28 @@
       "name": "@nightglide/engine",
       "version": "0.1.0",
       "dependencies": {
+        "@nightglide/config": "workspace:*",
         "@nightglide/core": "workspace:*",
+        "@nightglide/providers": "workspace:*",
+        "@nightglide/routing": "workspace:*",
         "@oh-my-pi/pi-coding-agent": "18.20.2",
+      },
+    },
+    "packages/providers": {
+      "name": "@nightglide/providers",
+      "version": "0.1.0",
+      "dependencies": {
+        "@nightglide/config": "workspace:*",
+        "@nightglide/core": "workspace:*",
+      },
+    },
+    "packages/routing": {
+      "name": "@nightglide/routing",
+      "version": "0.1.0",
+      "dependencies": {
+        "@nightglide/config": "workspace:*",
+        "@nightglide/core": "workspace:*",
+        "@nightglide/providers": "workspace:*",
       },
     },
     "packages/themes": {
@@ -68,6 +90,10 @@
     "@nightglide/core": ["@nightglide/core@workspace:packages/core"],
 
     "@nightglide/engine": ["@nightglide/engine@workspace:packages/engine"],
+
+    "@nightglide/providers": ["@nightglide/providers@workspace:packages/providers"],
+
+    "@nightglide/routing": ["@nightglide/routing@workspace:packages/routing"],
 
     "@nightglide/themes": ["@nightglide/themes@workspace:packages/themes"],
 
