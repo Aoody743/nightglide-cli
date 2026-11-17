@@ -34,3 +34,4 @@ bun run dev
 - 真实模型对话及干净环境重复构建仍需单独验证；不将旧测试或模拟响应作为证明。
 - 2026-11-18：Stage 1 全部改动在子模块 `codex/nightglide` 分支落成 5 个提交（`accccd9`…`5ae02bf`），核心回归套件 121 pass / 0 fail（含修正品牌化后的 composer shape preview 测试期望）。
 - 2026-11-18：发现子模块原为浅克隆（仅含 v18.20.2 单提交深度，无法推送），已 `git fetch --unshallow upstream` 补全上游历史后推送 `codex/nightglide` 与 `v18.20.2` 标签到私有 fork；`.gitmodules` 同步指向该 fork。
+- 2026-11-18：干净环境重复构建验证通过（见 `STAGE_2_3_VERIFICATION.md`）。注意：Stage 1 品牌化后版本横幅为 `nightglide/18.20.2`（`PI_RAW_BIN` 默认值，`cli.ts`），不再是 `omp/18.20.2`；本节早前的 `omp/18.20.2` 记录是品牌化提交之前所写。
