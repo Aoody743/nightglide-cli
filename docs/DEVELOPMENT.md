@@ -1,5 +1,7 @@
 # Nightglide 开发者与贡献者指南 (DEVELOPMENT)
 
+> **历史原型记录。** 本文描述已退役的 OpenTUI 原型架构（`apps/cli` + `@nightglide/*` 工作区），其中的命令、配置格式与完成度不适用于 OMP 原生新主线；现状以 [新路线图](ROADMAP.md) 为准，获取/构建/安装步骤见 [INSTALL.md](INSTALL.md)。本文仅作历史参考。
+
 > **"Build beyond the horizon." / "漫翔苍穹，构筑所想。"**
 
 本文档面向 Nightglide 的核心开发者与开源贡献者，详细指导如何搭建环境、运行调试、配置多模型提供商、执行工作负载路由与多智能体协作测试、构建发布以及扩展适配器。
