@@ -7,6 +7,10 @@
     "apps/*"
   ],
   "scripts": {
+    "nightglide": "PI_RAW_BIN=nightglide bun --cwd=vendor/omp/packages/coding-agent src/cli.ts",
+    "ng": "PI_RAW_BIN=nightglide bun --cwd=vendor/omp/packages/coding-agent src/cli.ts",
+    "start": "PI_RAW_BIN=nightglide bun --cwd=vendor/omp/packages/coding-agent src/cli.ts",
+    "omp": "bun --cwd=vendor/omp/packages/coding-agent src/cli.ts",
     "dev": "bun run --cwd apps/cli dev",
     "demo": "bun run --cwd apps/cli demo",
     "doctor": "bun run --cwd apps/cli doctor",
