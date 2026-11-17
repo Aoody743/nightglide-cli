@@ -6,8 +6,8 @@
 
 ## 1 · 位置与分支信息
 
-- Worktree 路径:`/Users/aoody743/.gemini/antigravity/worktrees/Nightglide CLI/feat_m2_coding_experience`
-- 分支:`feat_m2_coding_experience`。仅存在于本地,无上游远端(主仓库 `git remote` 为空),删除分支即永久丢失这 4 个提交。
+- Worktree 路径:`/Users/aoody743/.gemini/antigravity/worktrees/Nightglide CLI/feat_m2_coding_experience`(**已于 2026-11-18 移除**,见第 5 节处置决定)
+- 分支:`feat_m2_coding_experience`。原仅存在于本地;2026-11-18 起随主仓库推送到远端备份,分支引用保留。
 - 基线:`3630414`(等于主仓库当前 HEAD,分支 `docs/nightglide-experience-design`)。
 
 基线之上的 4 个提交(自旧至新,日期均为 2026-11-15/16):
@@ -57,7 +57,7 @@
 2. 注册模型列表由固定 `endless` 一个,扩展为 `endless` + 目标模型动态加入。
 3. 顺带修正一段缩进/括号结构。
 
-性质判断:针对本地 oMLX 端点(`127.0.0.1:8000/v1`)的调试/兼容性微调,属未完成的工作状态;`openai-completions` 是否正确适配该端点未经验证。若不经提交直接删除 worktree,此改动将丢失。
+性质判断:针对本地 oMLX 端点(`127.0.0.1:8000/v1`)的调试/兼容性微调,属未完成的工作状态;`openai-completions` 是否正确适配该端点未经验证。已于 2026-11-18 以提交 `c039d04`(chore(engine): archive uncommitted omlx provider debug change)原样归档到分支上,避免随 worktree 删除而丢失。
 
 ## 5 · 处置选项与建议
 
@@ -67,7 +67,15 @@
 | B · 归档提取后删除 worktree(建议) | 摘取纯算法与数据资产(diffParser、动效预算与 slot 逻辑、vendors 数据、auth 封装思路及配套测试)进主仓库参考位置,然后 `git worktree remove`;分支引用保留不删 | 需一次挑选/移植与引用检查;收益是目录清理、高价值资产落入主仓库,历史仍可追溯 |
 | C · 立即废弃 | 删除 worktree 并删除分支 | 风险最高:本仓库无任何远端,分支删除后 4 个提交与未提交改动不可恢复;不建议在资产提取前执行 |
 
-倾向选项 B:主线 Stage 4 明确列有「将确认有用的旧主题、路由和测试迁入新架构」事项,先提取、后清理既保留可用资产又不留长期悬空目录。**最终决定待项目负责人确认。**
+倾向选项 B:主线 Stage 4 明确列有「将确认有用的旧主题、路由和测试迁入新架构」事项,先提取、后清理既保留可用资产又不留长期悬空目录。
+
+### 处置决定(2026-11-18,项目负责人确认)
+
+执行「归档分支,删除 worktree」,资产提取推迟到 Stage 4 统一进行:
+
+1. 未提交的 oMLX 调试改动以 `c039d04` 原样提交到 `feat_m2_coding_experience` 分支顶端(5 个提交齐全)。
+2. `git worktree remove` 移除 `~/.gemini/antigravity/worktrees` 下的 worktree 目录;分支引用保留。
+3. 分支随主仓库推送到远端备份,历史可追溯;第 2 节高价值资产的提取迁移留待 Stage 4 执行。
 
 ---
 
