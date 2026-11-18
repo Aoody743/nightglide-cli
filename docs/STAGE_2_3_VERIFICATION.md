@@ -172,7 +172,35 @@
 
 ---
 
-## 四、剩余清单（按优先级，2026-11-19 第六轮 UI 后更新）
+## 十、第七轮 UI 优化（2026-11-19，推理强度华丽阶梯 + 批次收官，subagent 并行 ×5 + 主会话整合复验）
+
+用户方向明确：**高推理强度的 UI 要更华丽**；批次 2/3 与未精修面全部做完。
+
+1. **推理强度视觉阶梯（Effort Glow Ladder，旗舰）**（新共享模块 `chat/effort-ladder.ts` + `assistant-message.ts` + `tools/task.ts` + `status-line/segments.ts` + 两浅色主题）：
+   - glyph 阶梯：off 不显示、minimal `·`、low `◦`、medium `○`、high `◎`、xhigh/max `✦`，档位色 = 既有 `thinkingOff…Xhigh` 槽位，低档徽标整体 dim；
+   - 思考脉冲帧集随档位升级：minimal 2 帧 → high/xhigh 完整 `✻✼❉❊✺✹✸✶`，xhigh 帧色在 `thinkingXhigh`↔accent 逐帧交替；全部单列等宽（Zero Jitter），motion off 立即静态；
+   - status line model 段渲染**真实**档位 glyph（数据 = `session.state.thinkingLevel`，off/auto-pending 如实不显示），并把档位发布为进程级环境 effort（preview/test 闸门），主会话脉冲实时随档位；
+   - task 子智能体卡 effort 徽标（与 feed model badge 去重）；
+   - 对比度加固：Cloudlight/Daybreak 的 `thinkingLow/Medium` 加深（如 2.10→3.57），25 用例双表面审计锁定 ≥3.0；
+   - **thinkingMax 处置更正**：grep 证实**并非孤儿**（`theme-class.ts`、`schema-validation.ts`、agent-hub 在用）——第六轮盘点结论有误，如实更正；保留槽位，阶梯把 max 并入 xhigh 档。
+2. **120 列并排 diff（GATE-DIM-003）**（`chrome/diff.ts` + `tools/edit.ts`）：卡片内容宽 ≥120 自动并排——左删右新、行内词级 `toolDiffWord*` 双侧生效、`statusLineSep` 分隔线、双侧行号、hunk 内 -/+ 按序配对、上下文右行号游标派生；<120 与 unified **逐字节一致**；折叠按 raw 行预算（行对 ≤ 预算）；CJK 栏内截断不溢出；流式预览保持 unified（行预算语义限制，如实取舍）。
+3. **面内 toast**（新 `overlays/toast.ts` + `interactive-mode.ts`/`event-controller.ts`/`types.ts` 接线）：非模态瞬时容器（否决 `ui.showOverlay`——会置 hasOverlay 抢焦点并拦 6 处键位；改用 modelCycleContainer 同款 AnchoredLiveContainer + selfClearingChrome 地板，静息 0 行不抬地板）；3s 自动消失 + 450ms fade（向真实终端背景色混色），`--motion none` 即现即隐；事件：`retry_fallback_succeeded` → `已回退到 <model>`（原 showStatus 保留）、`setTheme` 落定 → `主题:<name>`（preview/ephemeral 不 toast）；`model_changed` 不 toast——无法区分手动切换与回退，诚实记录。
+4. **模型浏览器精修**（`overlays/model-browser.ts`）：头部右对齐 dim 计数（窄屏先删）、列表 text/dim 层次 + 聚焦选中 selectedBg 全行带（非聚焦 dim 光标，`setFocused` 语义首次成立）、详情 name bold/值 text/单位 dim/`borderMuted` 分隔/说明 muted；native describe 路径同源构建器；80/100/120 三档零溢出。
+5. **错误横幅品牌化**（`overlays/error-banner.ts`）：`theme.status.error` 字形 + 中文标题层 + dim 中文 meta（"发送下一条消息后自动消失"），正文逐字不动、dismiss 行为零变化（12 用例锁定）；恢复动作留 TODO（需键位 → interactive-mode 事件通路）。
+6. **验收断言固化与 CI**：主仓 `scripts/verify-workbench.test.ts`（63 用例：进程内细粒度断言 + 子进程 115/115 parity，阈值未放宽）；fork 新建 `.github/workflows/tui.yml`（natives 按锁版本自 npm 拉取 + dlopen smoke + `bun test packages/tui`；如实记录：tui 测试依赖 pi-natives 二进制，workspace 安装不带，332/357 文件 import 即失败，故 CI 需 staging 步骤）。
+
+**整合复验（主会话亲跑，全部数字）**：
+- 跨 agent 类型冲突 14 处（diff.ts 宽度收窄与配对行 prefix、toast native text 包装、effort 测试类型/枚举 cast），已修；
+- **整合抓到的真回归**：模型浏览器 `#detailSpans` 手搓价格逻辑丢失 `isFreeModel→"free"` 分支且 `model.cost` undefined 时崩溃（`model-browser.test.ts` 3 用例，HEAD 上 0 失败→工作树 3 失败）——已修，恢复 `formatCostDetail` 语义，39/39 + 视觉 14/14 全过；
+- **顺手修掉的三个预先存在失败**（HEAD 上即败、从未被任何轮次的定向复跑覆盖）：①startup-composer 首帧测试仍断言旧版圆角框 `╰`（产品早已是导航线新场景）→ 更新锚点为 `✦ nightglide`/`❯`；②窄屏工具紧凑回退行被 flight 6 列滑行帧挤掉耗时显示 → 紧凑回退改用 1 列 activity 帧，glide 留给宽绰行；③settings 布局审计发现**第三轮就欠的账**：`Nightglide Routing` 分组未注册进 `TAB_GROUPS["model"]` → 已注册；
+- 复验：tui 全量 **4,639 pass / 8 skip / 0 fail**（复跑确认唯一 fail 为 tools-native-github run-watch 既有 flake）；settings/startup/spinner/model-browser 定向 **75+5 pass / 0 fail**；双包 typecheck 0 错误；tui lint 0/0；`verify-workbench.ts` 115/115 + 验收测试 63/63；smoke ok；
+- **coding-agent 全量（22,392 用例，项目史上首次建立全量基线）**：修复后稳态 = **21,940 pass / 386 skip / ~52 fail**。失败构成：~50 个浏览器工具类 = **环境性**（共享 headless Chromium 无法在本环境启动，puppeteer ECONNREFUSED，串行复跑同败，与本轮改动文件零交集，stash 对照 HEAD 同败）；1 个 status-line 品牌补间失败留档（midFade===settled：已排除 Bun.color 量化问题，嫌疑集中在非 session-accent 回落路径，见 `component.ts:1436`）；1 个 ollama 隐式发现失败（依赖本机 ollama 服务状态，HEAD 上同败）。并行负载下数字会随浏览器超时风暴漂移（一次 24 分钟跑实测 94，其全部新增失败串行复跑通过，系噪音）。**本轮自身回归清零。**
+
+**未做/留待**：错误横幅恢复动作接线、并排 diff 的流式预览、status-line 补间 256 色回落路径修复、browser 套件需真 Chromium 环境（fork CI 只跑 packages/tui，不受影响）。
+
+---
+
+## 四、剩余清单（按优先级，2026-11-19 第七轮 UI 后更新）
 
 1. **真实云端跨模型验证**：被 claude-proxy 网关客户端白名单阻塞（外部服务策略）。需要用户决策：网关侧放行 / 更换端点 / 显式 models 列表 + 客户端头（涉及第三方访问策略，项目侧不擅自绕过）。
 2. **BALANCED/PERFORMANCE 真实双模型会话**：单测已覆盖语义；真实跑需云端可用（同阻塞 1）+ codexplus TTFT 排查。
@@ -183,4 +211,5 @@
 7. ~~原生 TSP 卡片导航线与动态模型同步更新~~：✅ 已全部实现并双轨验证（见第七、八节，含原生路径窄屏策略）。
 8. ~~工具执行卡片视觉层次与窄屏精修~~：✅ 已全部完成并自动化验证（见第七节）。
 9. ~~MCP / 扩展 / LSP / 计划模式~~：✅ 已全部真机验证（见第五节）。
-10. **UI 优化后续批次**（按方向文档盘点）：错误横幅品牌化 + 恢复动作、`thinkingMax` 孤儿槽位收尾（批次 2 剩余）；120 列并排 diff、面内 toast、验收断言进 CI（批次 3，战略级）。
+10. ~~UI 优化后续批次~~：✅ 批次 2/3 与未精修面已全部落地（见第十节）。更新后的留待项：错误横幅恢复动作接线、并排 diff 的流式预览、status-line 品牌补间 256 色回落路径修复（第十节留档）、browser 套件依赖真 Chromium 环境。
+11. **删除无消费者的旧原型**：`apps/cli`/`packages`/`tests` 仍在（引用检查后删除，待项目负责人确认）。
