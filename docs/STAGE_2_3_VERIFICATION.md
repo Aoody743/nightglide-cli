@@ -103,16 +103,56 @@
 **2. 工具卡片与状态行视觉层次**（`3b6f6536`，output-block.ts + status-line segments.ts 样式级）：running=accent 框+dim meta、success=borderMuted 收束+text 标题、error/warning 关键色标题+dim meta（调用方显式 borderColor 或自带 ANSI 时不重样式，全部取主题槽位）；状态行 model 名保持 primary、thinking/fast 徽标降 dim、routing 限定词 dim 使 mode+model 连成一串 accent。
 
 **验证**：welcome 相关 34 用例全过（含 4 个新用例）；output-block 11 pass（含 5 个新用例）；status-line 10 文件 70 pass；全量 tui 套件 4674 用例 4665 pass / 8 skip / 1 fail——唯一失败（tools-native-github run-watch）经 stash 对照与单独复跑确认为**套件顺序型既有 flake**（单独跑恒过），与本轮改动无关；tsc 两包 0 错误；`verify-workbench.ts` 已传入真实 context，45 张快照（5 主题 × 3 尺寸 × 3 状态）全部含导航线且无溢出；五主题三状态 ANSI 签名两两可区分、对比度 ≥3（标题层）/dim 3.47-4.31。
-**遗留**：原生 TSP 卡片路径未加导航线；`/model` 会话中途切换不实时刷新导航行（启动时一次性接入）；跨段间距归 group renderer 未动。
 
 ---
 
-## 四、剩余清单（按优先级，2026-11-18 第二轮后更新）
+## 七、UI 精修迭代（2026-11-18 第四轮，subagent 并行 + 主会话整合审查）
+
+交付 commit `f3b42d71`（`vendor/omp`）并增强自动化多尺寸走查套件 `scripts/verify-workbench.ts`：
+
+### 1. 原生 TSP 卡片安静品牌导航线（`welcome.ts`）
+- `WelcomeComponent.prototype.describe()` 原生节点树对齐 ANSI 布局：
+  - 顶部导航行 `node("row", { justify: "between", align: "center", role: "omp.welcome.nav" }, [ brandText, contextText? ], "nav")`；
+  - 左侧品牌文本：`✦ nightglide`（accent 星标 + bold 品牌名称，role: `omp.welcome.brand`）；
+  - 右侧上下文文本：真实 project（`muted`）与 live model（`dim`），以 ` / ` 连接（role: `omp.welcome.context`）；无 context 时右侧节点自然省略；
+  - 分割线：`node("rule", { role: "omp.welcome.rule" }, undefined, "nav-rule")`，位于导航行与 lockup 之间；
+  - 动态缓存比对：比对 `tip`、`context.project` 与 `context.model`，并在 `setContext` 时触发精确重构。
+
+### 2. 会话中途模型切换实时同步更新（`interactive-mode.ts` & `event-controller.ts`）
+- 封装 `updateWelcomeContext()`，在启动初次挂载以及 `model_changed` / `retry_fallback_succeeded` 事件触发时，自动提取最新 serving/configured 模型通过 `welcome.setContext(...)` 同步更新，并触发 `ui.requestRender()` 局部重绘。
+- 新增单元测试 `event-controller-welcome-context.test.ts` 验证协同流程。
+
+### 3. 工具执行过程与卡片视觉层次精修（`output-block.ts`、`status-line.ts`、`tool-card.ts`、`read.ts`）
+- 标题与 meta 中间的分隔圆点 ` · ` 统一派生 `dim` 语义色，杜绝 SGR reset 导致的圆点高亮晃眼。
+- 底框与折行 footerMeta 自动淡化：对纯文本 footerMeta 自动添加 `dim` 着色，保持卡片底边沉静。
+- 智能语义色彩派生：状态图标为 `error` / `warning` 时，未指定 titleColor 的卡片自动继承警示色彩，不再生硬回退至 accent。
+- 窄屏自适应：长标题智能右截断（`…`）、底框 footerMeta 溢出时自动折入卡片内容行，极限 1~5 列视口严格边界截断无溢出。
+
+### 4. 主题槽位、WCAG 对比度、动效 Zero Jitter 与多尺寸全量走查（`scripts/verify-workbench.ts`）
+- **主题完整性**：5 套内置主题 100% 声明全部 66 个色彩槽位（59 fg + 7 bg）。
+- **WCAG 2.1 AA 对比度**：五套主题画布主文对比度 10.19 ~ 16.85:1（AA 优级）；浅色主题（Cloudlight / Daybreak）的 `statusLineBg` 文本对比度 8.73 ~ 10.53:1，模型名 4.85 ~ 6.29:1，辅助 dim 文本 3.04 ~ 3.08:1（全部达标）。
+- **动效 Zero Jitter**：五套主题专属 Spinner（Flight: `━╾─`, Abyss: `●`, Aurora: `≈✦`, Cloudlight: `░▒▓`, Daybreak: `◎`）动态帧宽与静态占位帧宽严格一致（位移 = 0 列）。
+- **多尺寸自动化断言**：5 主题 × 3 尺寸 (80x24, 100x30, 120x36) × 4 模式 (empty, active-dialogue, approval, low-motion) 共 **110 项断言 100% 全部通过**。
+
+### 5. 验收结果数据
+- `bun test packages/tui/test/welcome.test.ts`：17/17 pass（含 4 个原生 TSP 导航线新增用例）
+- `bun test packages/tui/test/output-block.test.ts`：17/17 pass（含 6 个窄屏与色彩层次新增用例）
+- `bun test packages/coding-agent/test/event-controller-welcome-context.test.ts`：2/2 pass
+- `bun scripts/verify-workbench.ts`：110/110 pass
+- TypeScript 类型检查：`packages/tui` 与 `packages/coding-agent` **0 错误**。
+- `oxlint`：**0 错误，0 警告**。
+- `./nightglide --version` 与 `./nightglide --smoke-test`：正常输出 `nightglide/18.20.2`，smoke-test: ok。
+
+---
+
+## 四、剩余清单（按优先级，2026-11-18 第四轮后更新）
 
 1. **真实云端跨模型验证**：被 claude-proxy 网关客户端白名单阻塞（外部服务策略）。需要用户决策：网关侧放行 / 更换端点 / 显式 models 列表 + 客户端头（涉及第三方访问策略，项目侧不擅自绕过）。
 2. **BALANCED/PERFORMANCE 真实双模型会话**：单测已覆盖语义；真实跑需云端可用（同阻塞 1）+ codexplus TTFT 排查。
 3. **主 transcript 原生滚动**：结构上由终端 scrollback 承载（见第五节），无法经 pty 端到端自动化；如需 in-app 滚动属产品决策。
-4. **Stage 4**：打包二进制化（bun --compile 未验证）；旧原型清理（引用检查后）；顶部安静导航线设计债务（本轮 UI 迭代处理中）。
+4. **Stage 4**：打包二进制化（bun --compile 未验证）；旧原型清理（引用检查后）。
 5. **物理 VT100/无色终端**：未测（16 色/NO_COLOR 为代码推论）。
 6. **print 默认审批模式**：是否从 yolo 改为更严格默认 = 未决产品问题（当前：上游默认 + stderr 警告 + 文档）。
-7. ~~MCP / 扩展 / LSP / 计划模式~~：✅ 已全部真机验证（见第五节）。
+7. ~~原生 TSP 卡片导航线与动态模型同步更新~~：✅ 已全部实现并双轨验证（见第七节）。
+8. ~~工具执行卡片视觉层次与窄屏精修~~：✅ 已全部完成并自动化验证（见第七节）。
+9. ~~MCP / 扩展 / LSP / 计划模式~~：✅ 已全部真机验证（见第五节）。
