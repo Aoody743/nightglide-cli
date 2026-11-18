@@ -50,27 +50,30 @@ const REQUIRED_66_SLOTS = [
   "statusLineSpend", "statusLineStaged", "statusLineDirty", "statusLineUntracked", "statusLineOutput", "statusLineCost", "statusLineSubagents"
 ] as const;
 
-/** 各主题「进行中」工具卡片的动效文案，反映各自的动效身份。 */
+/** 各主题「进行中」工具卡片的动效文案，反映各自的动效身份。
+ *  Zero Jitter 约束：static 占位文案与 dynamic 文案必须严格等宽（0 列位移）——
+ *  保留与 dynamic 同列宽的冻结字形 + 相同正文，去掉 "(静态)" 后缀。
+ *  等宽由 [3/4] 段的 visibleWidth 实测断言保证。 */
 const RUNNING_META: Record<string, { dynamic: string; static: string }> = {
   flight: {
     dynamic: "━╾─ 正在滑行检索...",
-    static: "─ 正在滑行检索 (静态)...",
+    static: "─── 正在滑行检索...",
   },
   abyss: {
     dynamic: "● 正在检索深海符号...",
-    static: "· 正在检索深海符号 (静态)...",
+    static: "· 正在检索深海符号...",
   },
   aurora: {
     dynamic: "≈✦ 极光涟漪检索中...",
-    static: "✦ 极光涟漪检索中 (静态)...",
+    static: "── 极光涟漪检索中...",
   },
   cloudlight: {
     dynamic: "░▒▓ 云影漂移检索中...",
-    static: "░ 云影漂移检索中 (静态)...",
+    static: "░░░ 云影漂移检索中...",
   },
   daybreak: {
     dynamic: "◎ 晨光晕染检索中...",
-    static: "· 晨光晕染检索中 (静态)...",
+    static: "· 晨光晕染检索中...",
   },
 };
 
@@ -212,8 +215,15 @@ export function renderWorkbenchScreen(
   const promptLine = "  " + promptGutter + promptInput + " ".repeat(padLen) + hintText;
 
   const motionIndicator = mode === "low-motion" ? theme.fg("dim", " [motion:off] ") + theme.fg("statusLineSep", "│") : "";
-  const statusLineLeft = theme.fg("dim", " ⎇ main ") + theme.fg("statusLineSep", "│") + theme.fg("dim", " Nightglide CLI ") + theme.fg("statusLineSep", "│") + motionIndicator + theme.fg("statusLineModel", " endless (127.0.0.1:8000) ");
   const statusLineRight = theme.fg("dim", "0 tokens · $0.00 ");
+  // 窄屏保单行哲学：先按全量形态拼好并测量；溢出时收缩模型段，而非丢弃行或换行。
+  // motion 指示在 low-motion 模式必须保留可见（它正是该模式要验证的对象），故只收缩模型段。
+  const buildStatusLineLeft = (modelSegment: string) =>
+    theme.fg("dim", " ⎇ main ") + theme.fg("statusLineSep", "│") + theme.fg("dim", " Nightglide CLI ") + theme.fg("statusLineSep", "│") + motionIndicator + theme.fg("statusLineModel", modelSegment);
+  let statusLineLeft = buildStatusLineLeft(" endless (127.0.0.1:8000) ");
+  if (2 + visibleWidth(statusLineLeft) + 1 + visibleWidth(statusLineRight) > width) {
+    statusLineLeft = buildStatusLineLeft(" endless ");
+  }
   const statusPad = Math.max(1, width - 2 - visibleWidth(statusLineLeft) - visibleWidth(statusLineRight));
   const statusLine = "  " + statusLineLeft + " ".repeat(statusPad) + statusLineRight;
 
@@ -236,7 +246,9 @@ export function renderWorkbenchScreen(
     slackLines = Array(slack).fill("");
   } else {
     // 终端向上滚动，保留最新视口内容，紧随底部输入框
-    visibleContentLines = rawContentLines.slice(-availableContentHeight);
+    // 注意 slice(-0) ≡ slice(0)：availableContentHeight 为 0 时必须显式返回空数组，
+    // 否则会把全部内容行渲染进 0 高度的内容区，挤掉底部 chrome。
+    visibleContentLines = availableContentHeight > 0 ? rawContentLines.slice(-availableContentHeight) : [];
     slackLines = [];
   }
 
@@ -325,9 +337,9 @@ function runVerificationSuite() {
     );
 
     assert(
-      `${themeId}: 状态栏 dim 辅助文本对比度 (${statusDimC.toFixed(2)}:1 >= 3.0:1)`,
+      `${themeId}: 状态栏 dim 辅助文本对比度 (${statusDimC.toFixed(2)}:1 >= 3.0:1, WCAG 大文本线 [large-text]，非 4.5:1 AA 正文线)`,
       statusDimC >= 3.0,
-      `低于 3.0:1 阈值`
+      `低于 3.0:1 大文本线阈值 (large-text；正文 AA 线为 4.5:1)`
     );
 
     // 终端主背景对比度
@@ -378,6 +390,17 @@ function runVerificationSuite() {
         );
       }
     }
+
+    // Zero Jitter「动态 vs 静态占位」0 位移：low-motion 模式切到 static 文案时，
+    // 工具卡片 meta 行必须与 dynamic 帧严格等宽，否则静态替换帧会引起横向抖动。
+    const meta = RUNNING_META[themeId.replace("nightglide-", "")] ?? RUNNING_META.flight;
+    const dynamicWidth = visibleWidth(meta.dynamic);
+    const staticWidth = visibleWidth(meta.static);
+    assert(
+      `${themeId}: 动态 vs 静态占位 0 位移 [Zero Jitter] (dynamic ${dynamicWidth} 列 === static ${staticWidth} 列)`,
+      dynamicWidth === staticWidth,
+      `动态帧 ${dynamicWidth} 列 vs 静态占位帧 ${staticWidth} 列，位移 ${Math.abs(dynamicWidth - staticWidth)} 列`
+    );
   }
 
   // 4. 多尺寸适配走查 (80x24, 100x30, 120x36)
@@ -412,10 +435,13 @@ function runVerificationSuite() {
   console.log(`\n================================================================================`);
   console.log(`验收测试结果汇总: 全部 ${totalTests} 项检查，通过 ${passedTests} 项，失败 ${totalTests - passedTests} 项`);
   console.log("================================================================================");
+
+  return { total: totalTests, passed: passedTests };
 }
 
-// 运行测试套件
-runVerificationSuite();
+// 运行测试套件：通过 exitCode（而非 process.exit，避免截断后续快照输出）向 CI 传递失败信号
+const suiteResult = runVerificationSuite();
+process.exitCode = suiteResult.passed === suiteResult.total ? 0 : 1;
 
 // 打印具有代表性的典型快照供审查
 console.log("\n================================================================================");

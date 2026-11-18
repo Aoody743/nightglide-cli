@@ -52,7 +52,7 @@
 
 ## 4 · 迁移完成与发布准备
 
-进度（2026-11-18）：文档一致性已完成（`.env.example` 对齐新主线、Stage 1 报告更正、SECURITY.md 按真实架构重写、全部旧文档历史标记）；资产评估完成（[STAGE_4_ASSET_ASSESSMENT.md](STAGE_4_ASSET_ASSESSMENT.md)：diffParser/动效预算/品牌数据等对新主线均有原生等价，有据不迁）；可复现安装路径就绪（[INSTALL.md](INSTALL.md) + `scripts/install.sh`，二进制打包未验证）；旧原型与历史分支全部保留且已推送远程。安静导航线已实现（`cbd2b07d`，见 [STAGE_2_3_VERIFICATION.md](STAGE_2_3_VERIFICATION.md) 第六节）。
+进度（2026-11-18）：文档一致性已完成（`.env.example` 对齐新主线、Stage 1 报告更正、SECURITY.md 按真实架构重写、全部旧文档历史标记）；资产评估完成（[STAGE_4_ASSET_ASSESSMENT.md](STAGE_4_ASSET_ASSESSMENT.md)：diffParser/动效预算/品牌数据等对新主线均有原生等价，有据不迁）；可复现安装路径就绪（[INSTALL.md](INSTALL.md) + `scripts/install.sh`，二进制打包未验证）；旧原型与历史分支全部保留且已推送远程。安静导航线已实现（`cbd2b07d`，见 [STAGE_2_3_VERIFICATION.md](STAGE_2_3_VERIFICATION.md) 第六节）；原生 TSP 卡片导航线、/model 中途切换动态同步与原生窄屏策略已实现（`f3b42d7` + 第五轮审计加固，见同文档第七、八节；走查套件 115 项断言，失败即非零退出码）。
 
 - [x] 将确认有用的旧主题、路由和测试迁入新架构；不移植伪造成功的后备逻辑（主题五套已迁；路由语义已按 OMP role 机制重实现并经审计加固至 30 个测试；旧路由场景经评估由新测试矩阵覆盖，不整体搬运）。
 - [ ] 替换或删除无消费者的旧原型、过时说明和生成产物；删除前完成引用检查并保证历史可追溯（旧原型 `apps/cli`/`packages`/`tests` 仍在，全部历史已在远程分支可追溯；删除属破坏性操作，待项目负责人确认）。
