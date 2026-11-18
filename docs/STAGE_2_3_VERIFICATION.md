@@ -157,7 +157,22 @@
 
 ---
 
-## 四、剩余清单（按优先级，2026-11-18 第五轮审计后更新）
+## 九、第六轮 UI 优化（2026-11-19，方向文档驱动的未精修面，subagent 并行 ×3 + 主会话整合复验）
+
+按 [NIGHTGLIDE_DIRECTION.md](NIGHTGLIDE_DIRECTION.md) 对高频可见面补精修（先盘点方向承诺 vs 实现，锁定六项，文件所有权分离）：
+
+1. **diff 词级高亮降噪**（`theme/schema.ts` + `chrome/diff.ts` + 五主题）：新增**可选**槽 `toolDiffWordAdded`/`toolDiffWordRemoved`（渲染点 `hasColor` 回落行级色，仿 `assistantMessageText` 先例；不入 66 必填列表，verify-workbench 兼容）；`renderIntraLineDiff` 移除 `theme.inverse` 反色——大段改动不再满屏反色。五主题精修值：深色取本主题 ansi 亮色同值（flight `#86efac`/`#fca5a5`），浅色加深降饱和（cloudlight `#0d5c2c`/`#7f1d1d`）。
+2. **审批警示态**（`overlays/approval-dialog.ts`）：写/执行类审批（bash/write/edit/ast_edit/memory_edit/eval/manage_skill）面板边框 warning 色（新增 `ApprovalOverlayPanel` 覆写渲染，divider 保持默认，静态常亮无动画）；read/grep 等只读审批维持原样。如实记录：对话框无结构化工具类型，按 prompt 首行工具名判定。
+3. **composer nightglide 两态**（`components/composer/nightglide.ts` + `types.ts` + `editor.ts`/`custom-editor.ts`）：working（流式/工具执行中）顶线整体 accent + 左端 `✦ ` 徽标，idle 保持 borderMuted 原样；`ComposerChromeContext.working?` 为可选增量，其他 shape 与外部调用零破坏；无动画无定时器。
+4. **markdown 标题字阶**（`theme/tui-adapters.ts`）：heading 适配消费 depth——H1 `mdHeading`（markdown.ts 另加 underline）/H2 `mdHeading`/H3 `text`/H4 `muted`/H5-6 `dim`，权重由 markdown.ts 统一处理不叠加；colorful 模式沿用原 ANSI 阶梯。
+5. **Aurora glow 补齐**（`prompt/welcome.ts`）：新增 `AURORA_STOPS`（紫罗兰→青绿，取 aurora vars 四色，亮度中段凹陷节奏与既有四组一致），暗色分支 aurora 不再回落 Flight 色带。
+6. **success 标题色统一**（`render/status-line.ts` + `render/tool-card.ts`）：success 落 `text`，与 output-block 三态基准一致（error/warning 不变，running/info 仍 accent，显式 titleColor 优先）；双路径 8 用例锁定。
+
+**验证（主会话整合复验，全部亲跑）**：tui 全量 **4,526 pass / 8 skip / 0 fail**（338 文件）；双包 typecheck **0 错误**（tui 1,451 / coding-agent 4,978 文件）；tui oxlint **0 警告**（coding-agent 18 条上游既有不变）；`verify-workbench.ts` **115/115** + exit 0；`nightglide --version` 与 `--smoke-test` ok。测试增量：theme-diff-word-color 新 7、status-line-title-color 新 8、dialogs-native +1（23）、composer-shape-preview +4（8）、colorful-markdown 六档锁定、edit-renderer 更新（32）、welcome +1（23）。
+
+---
+
+## 四、剩余清单（按优先级，2026-11-19 第六轮 UI 后更新）
 
 1. **真实云端跨模型验证**：被 claude-proxy 网关客户端白名单阻塞（外部服务策略）。需要用户决策：网关侧放行 / 更换端点 / 显式 models 列表 + 客户端头（涉及第三方访问策略，项目侧不擅自绕过）。
 2. **BALANCED/PERFORMANCE 真实双模型会话**：单测已覆盖语义；真实跑需云端可用（同阻塞 1）+ codexplus TTFT 排查。
@@ -168,3 +183,4 @@
 7. ~~原生 TSP 卡片导航线与动态模型同步更新~~：✅ 已全部实现并双轨验证（见第七、八节，含原生路径窄屏策略）。
 8. ~~工具执行卡片视觉层次与窄屏精修~~：✅ 已全部完成并自动化验证（见第七节）。
 9. ~~MCP / 扩展 / LSP / 计划模式~~：✅ 已全部真机验证（见第五节）。
+10. **UI 优化后续批次**（按方向文档盘点）：错误横幅品牌化 + 恢复动作、`thinkingMax` 孤儿槽位收尾（批次 2 剩余）；120 列并排 diff、面内 toast、验收断言进 CI（批次 3，战略级）。
