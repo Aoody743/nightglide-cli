@@ -76,13 +76,43 @@
 
 ---
 
-## 四、剩余清单（按优先级）
+## 五、Stage 0 补充验证二（2026-11-18 第二轮，MCP/扩展/LSP/计划模式/TUI 交互）
+
+沙箱隔离验证（`PI_CODING_AGENT_DIR` 指向 /tmp agentdir，models.yml 只读复制；未改动用户真实 `~/.omp` 与 vendor/omp）。真实模型走本地网关 `codexplus/gpt-6.1-terra`。
+
+| 项 | 结果 | 证据 |
+|---|---|---|
+| MCP | ✅ | 手写 stdio JSON-RPC server（/tmp/ng-mcp-test/server.mjs）注册于沙箱 mcp.json；`-p --mode json` 真跑：模型发现 `mcp__ng_echo_echo` 并真实调用，toolResult 返回 `NG_ECHO_RESULT: stage0-mcp-probe`（会话 JSONL：/tmp/ng-stage0/mcp-session.jsonl）。配置格式 = 项目根 `mcp.json`/`.omp/mcp.json`（mcp-json discovery） |
+| 扩展 | ✅ | 两条注册路径均真机验证：`.omp/extensions/` 自动发现（ng-toy-ext.ts，模型调用返回 `NG_EXT_TOOL_OK`）与 config.yml `extensions:` 数组（返回 `NG_CONFIG_EXT_OK`）；loaded.log 记录 session_start 事件 |
+| LSP | ✅ | 本机真实 rust-analyzer + Cargo 项目：`lsp` 工具 symbols 列出函数、references 返回 3 处精确行号、hover 返回签名+文档（lsp-session.jsonl）。本机无 typescript-language-server/pyright/gopls（如实记录） |
+| 计划模式 | ✅ | print 模式按设计忽略 plan.defaultOnStartup（stderr 明确提示，print-mode.ts issue #8272）；`--plan-yolo --plan-yolo-into` 真跑全流程：只读探查 → 计划写入 plan.md → propose → "Plan approved. Implementing" → 真实创建 plan-check.txt |
+| TUI 取消 | ✅ | 流式中（~2000 字 delta）发 Esc：delta 归零、`⎋ Working…` 行消失、composer 恢复可输入；"Interrupted by user" 标签被有意抑制（shouldRenderAbortReason），持久化证据 = 会话文件 `stopReason:"aborted"` |
+| TUI 滚动 | ⚠️ | 主 transcript 提交进**终端原生 scrollback**（interactive-mode.ts:4377，无 in-app 滚动键）——pty 无法从内部驱动宿主模拟器，无法端到端验证（结构性限制，非缺陷）；in-app overlay 滚动实测通过：alt+m 模型浏览器 77 项超屏，pageDown/pageUp 视口翻页真实生效 |
+| TUI resize | ✅ | 两轮 stty pty 重设（80×24→120×40）：分隔线宽度 80→120 重绘、composer 可用（round1: agent C；round2: 分隔线 run 统计 2×≥118 + 1×80） |
+| 主题真实切换 | ✅ | 真实 TUI 对比捕获（/tmp/ng-capture-flight.log vs cloud）：flight 特有色 `38;5;99`(4次)/`147`(3次) 在 cloud 捕获中为 0；cloudlight 特有色 `38;5;110`(4次)/`60`/`67` 在 flight 中为 0——主题在真实 TUI 中真实生效 |
+
+沙箱产物保留在 /tmp/ng-stage0、/tmp/ng-mcp-*、/tmp/ng-ext-test、/tmp/ng-lsp-test、/tmp/ng-tui-stage0。expect 脚本可复用（/tmp/ng-tui-stage0/*.exp）。
+
+---
+
+## 六、UI 精修迭代（2026-11-18 第三轮，subagent 并行 + 主会话整合）
+
+按 NIGHTGLIDE_DIRECTION.md 落地两项完整可见改进（文件所有权分离，整合时合并验证）：
+
+**1. 安静品牌导航线**（`cbd2b07d`，welcome.ts + interactive-mode.ts 调用点）：块状品牌标上方新增单行导航——左 `✦ nightglide`（accent 星标 + bold 品牌名），右对齐真实 project（会话 cwd basename）与真实 session 模型（`formatModelStringWithRouting`），下接 borderMuted 满宽发丝线。数据未知即省略、绝不编造；quiet 启动不受影响；`render(width, context?)` 向后兼容 + `setContext` 宿主钩子；窄屏先删/截右侧保单行（40 列仍成立）。
+**2. 工具卡片与状态行视觉层次**（`3b6f6536`，output-block.ts + status-line segments.ts 样式级）：running=accent 框+dim meta、success=borderMuted 收束+text 标题、error/warning 关键色标题+dim meta（调用方显式 borderColor 或自带 ANSI 时不重样式，全部取主题槽位）；状态行 model 名保持 primary、thinking/fast 徽标降 dim、routing 限定词 dim 使 mode+model 连成一串 accent。
+
+**验证**：welcome 相关 34 用例全过（含 4 个新用例）；output-block 11 pass（含 5 个新用例）；status-line 10 文件 70 pass；全量 tui 套件 4674 用例 4665 pass / 8 skip / 1 fail——唯一失败（tools-native-github run-watch）经 stash 对照与单独复跑确认为**套件顺序型既有 flake**（单独跑恒过），与本轮改动无关；tsc 两包 0 错误；`verify-workbench.ts` 已传入真实 context，45 张快照（5 主题 × 3 尺寸 × 3 状态）全部含导航线且无溢出；五主题三状态 ANSI 签名两两可区分、对比度 ≥3（标题层）/dim 3.47-4.31。
+**遗留**：原生 TSP 卡片路径未加导航线；`/model` 会话中途切换不实时刷新导航行（启动时一次性接入）；跨段间距归 group renderer 未动。
+
+---
+
+## 四、剩余清单（按优先级，2026-11-18 第二轮后更新）
 
 1. **真实云端跨模型验证**：被 claude-proxy 网关客户端白名单阻塞（外部服务策略）。需要用户决策：网关侧放行 / 更换端点 / 显式 models 列表 + 客户端头（涉及第三方访问策略，项目侧不擅自绕过）。
 2. **BALANCED/PERFORMANCE 真实双模型会话**：单测已覆盖语义；真实跑需云端可用（同阻塞 1）+ codexplus TTFT 排查。
-3. **交互 TUI 人工确认**：取消（Esc）自动化检测不确定；滚动、resize、`/models` 视图、diff 展开待人工过一遍（expect 脚本 `/tmp/ng-tui-verify.exp`、`/tmp/ng-tui-cancel.exp` 可复用）。
-4. **MCP / 扩展 / LSP / 计划模式**：未验证（Stage 0 清单剩余项）。
-5. **Stage 4**：旧原型清理（引用检查后）、diffParser 等资产摘取（见 M2_WORKTREE_INVENTORY.md）、打包与发布准备。
-6. **设计债务**：顶部安静导航线（NIGHTGLIDE_DIRECTION.md 构图）未实现；welcome 为块状品牌标。
-7. **物理 VT100/无色终端**：未测（16 色/NO_COLOR 为代码推论）。
-8. **print 默认审批模式**：是否从 yolo 改为更严格默认 = 未决产品问题（当前：上游默认 + stderr 警告 + 文档）。
+3. **主 transcript 原生滚动**：结构上由终端 scrollback 承载（见第五节），无法经 pty 端到端自动化；如需 in-app 滚动属产品决策。
+4. **Stage 4**：打包二进制化（bun --compile 未验证）；旧原型清理（引用检查后）；顶部安静导航线设计债务（本轮 UI 迭代处理中）。
+5. **物理 VT100/无色终端**：未测（16 色/NO_COLOR 为代码推论）。
+6. **print 默认审批模式**：是否从 yolo 改为更严格默认 = 未决产品问题（当前：上游默认 + stderr 警告 + 文档）。
+7. ~~MCP / 扩展 / LSP / 计划模式~~：✅ 已全部真机验证（见第五节）。

@@ -127,7 +127,7 @@ function renderWorkbenchScreen(
   setThemeInstance(t);
 
   const welcome = new WelcomeComponent("18.20.2");
-  const welcomeLines = welcome.render(width);
+  const welcomeLines = welcome.render(width, { project: "nightglide-cli", model: "omlx/endless" });
 
   let middleLines: string[] = [];
   if (mode === "empty") {
