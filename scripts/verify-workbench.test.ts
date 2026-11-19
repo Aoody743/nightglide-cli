@@ -7,6 +7,7 @@
  *   - 66 主题槽位完整性（5 主题）
  *   - WCAG 2.1 AA 关键对比度（text/model ≥ 4.5:1，dim ≥ 3.0:1 大文本线）
  *   - spinner 全帧等宽 + 动态 vs 静态占位 0 位移（Zero Jitter）
+ *   - GATE-A11Y-002: NO_COLOR=1 真实 CLI 与脚本零 ANSI 颜色转义序列
  *
  * 口径说明：所有阈值与组合与 `scripts/verify-workbench.ts` 现行 115 项完全一致
  * 或覆盖其核心，未放宽任何阈值。
@@ -246,5 +247,49 @@ describe("verify-workbench · 子进程真跑验收 (115 项口径锁定)", () =
 		expect(proc.exitCode).toBe(0);
 		expect(output).toContain("115 项检查，通过 115 项");
 		expect(output).not.toContain("✗ [FAIL]");
+	});
+});
+
+// ============================================================================
+// [GATE-A11Y-002] NO_COLOR=1 真实 CLI 零转义序列自动化门禁
+// ============================================================================
+describe("verify-workbench · GATE-A11Y-002: NO_COLOR=1 真实 CLI 零转义序列自动化门禁", () => {
+	const ANSI_COLOR_REGEX = /\x1b\[(?:[0-9;]*m)/;
+
+	it("./nightglide --version: NO_COLOR=1 真实 CLI 退出码 0 且 100% 零 ANSI 颜色转义序列", async () => {
+		const repoRoot = path.resolve(import.meta.dir, "..");
+		const proc = Bun.spawn(["./nightglide", "--version"], {
+			cwd: repoRoot,
+			env: { ...process.env, NO_COLOR: "1" },
+			stdout: "pipe",
+			stderr: "pipe",
+		});
+		const stdout = await new Response(proc.stdout).text();
+		const stderr = await new Response(proc.stderr).text();
+		const exitCode = await proc.exited;
+
+		expect(exitCode).toBe(0);
+		const output = stdout + stderr;
+		expect(output).toContain("nightglide");
+		expect(output).not.toMatch(ANSI_COLOR_REGEX);
+	});
+
+	it("verify-workbench.ts: NO_COLOR=1 降级输出退出码 0 且 100% 零 ANSI 颜色转义序列", async () => {
+		const repoRoot = path.resolve(import.meta.dir, "..");
+		const proc = Bun.spawn([process.execPath, "run", "scripts/verify-workbench.ts"], {
+			cwd: repoRoot,
+			env: { ...process.env, NO_COLOR: "1" },
+			stdout: "pipe",
+			stderr: "pipe",
+		});
+		const stdout = await new Response(proc.stdout).text();
+		const stderr = await new Response(proc.stderr).text();
+		const exitCode = await proc.exited;
+
+		expect(exitCode).toBe(0);
+		const output = stdout + stderr;
+		expect(output).toContain("115 项检查，通过 115 项");
+		expect(output).not.toContain("✗ [FAIL]");
+		expect(output).not.toMatch(ANSI_COLOR_REGEX);
 	});
 });

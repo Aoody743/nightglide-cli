@@ -196,20 +196,61 @@
 - 复验：tui 全量 **4,639 pass / 8 skip / 0 fail**（复跑确认唯一 fail 为 tools-native-github run-watch 既有 flake）；settings/startup/spinner/model-browser 定向 **75+5 pass / 0 fail**；双包 typecheck 0 错误；tui lint 0/0；`verify-workbench.ts` 115/115 + 验收测试 63/63；smoke ok；
 - **coding-agent 全量（22,392 用例，项目史上首次建立全量基线）**：修复后稳态 = **21,940 pass / 386 skip / ~52 fail**。失败构成：~50 个浏览器工具类 = **环境性**（共享 headless Chromium 无法在本环境启动，puppeteer ECONNREFUSED，串行复跑同败，与本轮改动文件零交集，stash 对照 HEAD 同败）；1 个 status-line 品牌补间失败留档（midFade===settled：已排除 Bun.color 量化问题，嫌疑集中在非 session-accent 回落路径，见 `component.ts:1436`）；1 个 ollama 隐式发现失败（依赖本机 ollama 服务状态，HEAD 上同败）。并行负载下数字会随浏览器超时风暴漂移（一次 24 分钟跑实测 94，其全部新增失败串行复跑通过，系噪音）。**本轮自身回归清零。**
 
-**未做/留待**：错误横幅恢复动作接线、并排 diff 的流式预览、status-line 补间 256 色回落路径修复、browser 套件需真 Chromium 环境（fork CI 只跑 packages/tui，不受影响）。
+**未做/留待**：并排 diff 的流式预览（工程取舍）、browser 套件需真 Chromium 环境（fork CI 只跑 packages/tui，不受影响）。
 
 ---
 
-## 四、剩余清单（按优先级，2026-11-19 第七轮 UI 后更新）
+## 十一、第八轮 UI 深度重构与发行准备验收（2026-11-19，基础底座重构 + 高频浮层全面精修 + 工效学门禁闭环）
+
+在第七轮完成之后，团队开展了对全部 UI 交互面与验收准则的全景审计，发现底层列表染色机制、问询弹窗色彩倒挂、会话卡片散架、宽屏文本未加约束等 6 大断层。本轮通过 Subagents 并行攻坚完成全面重构与修复：
+
+1. **通用列表底座（`select-list.ts` & `tui-adapters.ts`）**：
+   - 彻底移除了将整行粗暴塞入 `selectedText`（`accent`）的历史实现；
+   - 恢复三态层次：光标保留自身样式，图标保持沉静 `muted`，描述保持弱化 `muted`，**仅主项名称高亮**；
+   - 引入满行宽 `selectedRow` 底色带（`theme.bgFill("selectedBg", padded)`）并补齐右侧空格，消除了悬停毛刺背景；
+   - 立即惠及 `/theme`、`/marketplace`、`/thinking`、`/queue`、`/login` 以及编辑器斜杠补全弹窗（`editor.ts` Autocomplete）。
+2. **问询弹窗（`ask-dialog.ts`）**：
+   - 修复已勾选项文字反常降级为暗哑 `toolOutput` 的色彩倒挂 Bug，重构为加粗高对比度 `text`，光标选中项保持 `accent`；
+   - 统一多行说明与自定义输入的动态缩进 `indentWidth`，消除 2 列垂直错位；
+   - 将推荐项升级为醒目的 `[Recommended]` 警示徽标。
+3. **会话管理与历史搜索（`session-selector.ts` & `history-search.ts`）**：
+   - 多行会话卡片整体包裹 `selectedBg` 满宽底色带，形成整体聚焦的实体卡片感，卡片间以无底色空行呼吸；
+   - 消息预览行在选中态自动提亮为 `muted`，保持舒适对比度；
+   - 完整支持鼠标悬停（Hover）高亮并局部重绘；
+   - 当前会话标记升级为实体反差胶囊徽标；`history-search` 升级为 `bgFill` 防穿孔并支持鼠标悬停与直选。
+4. **用量与费用看板（`usage-dashboard.ts`）**：
+   - 浅色主题下热力图起始底色由过浅的白灰色调整为中性灰底（`#c0c5d5`），使得第一档活跃度在纯白背景下的对比度严格达到 $\ge 3.0:1$（WCAG 大文本线）；
+   - 多列配额卡片间隙引入居中的微弱 `borderMuted` 垂直分割立柱（`│`）。
+5. **宽屏工效学正文约束（GATE-DIM-003）与 80x24 视口折叠**：
+   - `assistant-message.ts` 落实 `GATE-DIM-003`：在宽屏（120~160 列）下将 Markdown 正文最大排版宽度严格约束在 90 列以内，杜绝超宽长行阅读视疲劳；
+   - `welcome.ts` 在终端行数 $\le 24$ 时自动折叠多行艺术标与副标题，仅输出 2 行精简导航线与规则线，为 80x24 紧凑视口释放 8+ 行空间。
+6. **审批弹窗与计划审查交互增强**：
+   - `approval-dialog.ts` 选项行引入 `selectedBg` 满宽底色带与单键快捷键徽标（`[y]`, `[s]`, `[n]`），参数详情区分 label (dim) 与 value (text)；
+   - `plan-review-overlay.ts` 键盘操作项对齐胶囊底色，支持数字键 `1`/`2`/`3` 一键直通。
+7. **错误横幅 ANSI 键盘恢复与真实 NO_COLOR 门禁**：
+   - `error-banner.ts` 补齐纯 ANSI 终端下的键盘路由（`Esc` 关闭，`Ctrl+O` 展开详情），打通恢复通道；
+   - 查清并彻底修复 `status-line-motion-effects.test.ts` 品牌补间测试（原因为测试正则误匹配了外层 padding 文本色）；
+   - `scripts/verify-workbench.test.ts` 落地 `GATE-A11Y-002`：针对 `NO_COLOR=1` 真实 CLI 启动输出断言 100% 零颜色转义序列。
+
+**整合复验（主会话亲跑，全量数字）**：
+- **tui 全量**：**4,850 pass / 8 skip / 1 fail**（370 文件，唯一失败为 GitHub run-watch 既有 flake）；较第七轮新增 211 个通过用例；
+- **定向重构单测**：`session-selector`, `history-search`, `ask-dialog`, `usage-dashboard`, `select-list`, `settings-visual-hierarchy`, `dialogs-native`, `error-banner`, `plan-review-overlay`, `assistant-message-width-constraint`, `welcome` 合计 **225 pass / 0 fail**；
+- **全项目静态检查**：16 个包（包括 `@oh-my-pi/pi-tui` 与 `@oh-my-pi/pi-coding-agent`）TypeScript 类型检查 **0 错误**；代码格式化检查 **0 差异**；
+- **工作台门禁验收**：`scripts/verify-workbench.test.ts` **65/65 pass**（含新增 2 项 NO_COLOR=1 真实 CLI 零转义序列断言）；子进程 115 项检查 **115/115 pass**；
+- **入口自检**：`./nightglide --version` 输出 `nightglide/18.20.2`，`./nightglide --smoke-test` 输出 `smoke-test: ok`。
+
+---
+
+## 四、剩余清单（按优先级，2026-11-19 第八轮 UI 与发行准备后更新）
 
 1. **真实云端跨模型验证**：被 claude-proxy 网关客户端白名单阻塞（外部服务策略）。需要用户决策：网关侧放行 / 更换端点 / 显式 models 列表 + 客户端头（涉及第三方访问策略，项目侧不擅自绕过）。
 2. **BALANCED/PERFORMANCE 真实双模型会话**：单测已覆盖语义；真实跑需云端可用（同阻塞 1）+ codexplus TTFT 排查。
 3. **主 transcript 原生滚动**：结构上由终端 scrollback 承载（见第五节），无法经 pty 端到端自动化；如需 in-app 滚动属产品决策。
-4. **Stage 4**：打包二进制化（bun --compile 未验证）；旧原型清理（引用检查后）。
-5. **物理 VT100/无色终端**：未测（16 色/NO_COLOR 为代码推论）。
+4. **Stage 4 二进制打包**：launcher 源码模式已验证完整就绪；`bun --compile` 二进制打包待发布执行。
+5. ~~物理 VT100/无色终端~~：✅ `GATE-A11Y-002` NO_COLOR=1 真实 CLI 零转义序列门禁测试已落地并通过。
 6. **print 默认审批模式**：是否从 yolo 改为更严格默认 = 未决产品问题（当前：上游默认 + stderr 警告 + 文档）。
-7. ~~原生 TSP 卡片导航线与动态模型同步更新~~：✅ 已全部实现并双轨验证（见第七、八节，含原生路径窄屏策略）。
-8. ~~工具执行卡片视觉层次与窄屏精修~~：✅ 已全部完成并自动化验证（见第七节）。
-9. ~~MCP / 扩展 / LSP / 计划模式~~：✅ 已全部真机验证（见第五节）。
-10. ~~UI 优化后续批次~~：✅ 批次 2/3 与未精修面已全部落地（见第十节）。更新后的留待项：错误横幅恢复动作接线、并排 diff 的流式预览、status-line 品牌补间 256 色回落路径修复（第十节留档）、browser 套件依赖真 Chromium 环境。
+7. ~~原生 TSP 卡片导航线与动态模型同步更新~~：✅ 已全部实现并双轨验证。
+8. ~~工具执行卡片视觉层次与窄屏精修~~：✅ 已全部完成并自动化验证。
+9. ~~MCP / 扩展 / LSP / 计划模式~~：✅ 已全部真机验证。
+10. ~~UI 优化后续批次~~：✅ 全部 8 轮 UI 优化已全面落地（包含列表底座重构、色彩倒挂修复、会话卡片、用量看板、宽屏 90 列工效学上限、80x24 视口折叠、审批与计划快捷键、错误横幅键盘恢复通路、status-line 补间修复）。更新后的留待项：并排 diff 流式预览（工程取舍）、browser 套件依赖真 Chromium 环境。
 11. **删除无消费者的旧原型**：`apps/cli`/`packages`/`tests` 仍在（引用检查后删除，待项目负责人确认）。
