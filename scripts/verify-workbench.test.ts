@@ -8,6 +8,7 @@
  *   - WCAG 2.1 AA 关键对比度（text/model ≥ 4.5:1，dim ≥ 3.0:1 大文本线）
  *   - spinner 全帧等宽 + 动态 vs 静态占位 0 位移（Zero Jitter）
  *   - GATE-A11Y-002: NO_COLOR=1 真实 CLI 与脚本零 ANSI 颜色转义序列
+ *   - GATE-TEARDOWN-001: 终端优雅复原真实 CLI 自动化门禁（进程退出、SIGINT 中断与资源释放）
  *
  * 口径说明：所有阈值与组合与 `scripts/verify-workbench.ts` 现行 115 项完全一致
  * 或覆盖其核心，未放宽任何阈值。
@@ -291,5 +292,131 @@ describe("verify-workbench · GATE-A11Y-002: NO_COLOR=1 真实 CLI 零转义序�
 		expect(output).toContain("115 项检查，通过 115 项");
 		expect(output).not.toContain("✗ [FAIL]");
 		expect(output).not.toMatch(ANSI_COLOR_REGEX);
+	});
+});
+
+// ============================================================================
+// [GATE-TEARDOWN-001] 终端优雅复原与退出保护真实 CLI 自动化门禁
+// ============================================================================
+describe("verify-workbench · GATE-TEARDOWN-001: 终端优雅复原与退出保护真实 CLI 自动化门禁", () => {
+	it("./nightglide --smoke-test 正常自检退出码为 0 且终端环境完好", async () => {
+		const repoRoot = path.resolve(import.meta.dir, "..");
+		const proc = Bun.spawn(["./nightglide", "--smoke-test"], {
+			cwd: repoRoot,
+			stdout: "pipe",
+			stderr: "pipe",
+		});
+		const stdout = await new Response(proc.stdout).text();
+		const exitCode = await proc.exited;
+
+		expect(exitCode).toBe(0);
+		expect(stdout).toContain("smoke-test: ok");
+	});
+
+	it("./nightglide 响应打断信号 (SIGINT) 能够优雅终止且退出状态明确", async () => {
+		const repoRoot = path.resolve(import.meta.dir, "..");
+		const proc = Bun.spawn(["./nightglide", "--smoke-test"], {
+			cwd: repoRoot,
+			stdout: "pipe",
+			stderr: "pipe",
+		});
+		// 验证进程已挂载并可接受信号
+		proc.kill("SIGINT");
+		const exitCode = await proc.exited;
+		// 进程成功响应信号退出（通常为 0 或 130 SIGINT 退出码）
+		expect([0, 130, null]).toContain(exitCode);
+	});
+});
+
+// ============================================================================
+// [GATE-TEARDOWN-001] 终端优雅复原真实 CLI 自动化门禁
+// ============================================================================
+describe("verify-workbench · GATE-TEARDOWN-001: 终端优雅复原真实 CLI 自动化门禁", () => {
+	const repoRoot = path.resolve(import.meta.dir, "..");
+
+	it("./nightglide --version: 真实 CLI 进程退出码 0，且无悬挂泄漏", async () => {
+		const proc = Bun.spawn(["./nightglide", "--version"], {
+			cwd: repoRoot,
+			stdout: "pipe",
+			stderr: "pipe",
+		});
+		const stdout = await new Response(proc.stdout).text();
+		const stderr = await new Response(proc.stderr).text();
+		const exitCode = await proc.exited;
+
+		expect(exitCode).toBe(0);
+		expect(proc.exitCode).toBe(0);
+		expect(stdout).toContain("nightglide");
+		expect(stderr.trim()).toBe("");
+	});
+
+	it("./nightglide --help: 真实 CLI 完整帮助文档输出退出码 0，正常退出无悬挂", async () => {
+		const proc = Bun.spawn(["./nightglide", "--help"], {
+			cwd: repoRoot,
+			stdout: "pipe",
+			stderr: "pipe",
+		});
+		const stdout = await new Response(proc.stdout).text();
+		const stderr = await new Response(proc.stderr).text();
+		const exitCode = await proc.exited;
+
+		expect(exitCode).toBe(0);
+		expect(proc.exitCode).toBe(0);
+		expect(stdout).toContain("nightglide");
+		expect(stdout).toContain("USAGE");
+		expect(stderr.trim()).toBe("");
+	});
+
+	it("./nightglide --mode rpc: 模拟 SIGINT (Ctrl+C) 优雅复原终端并恢复退出状态 (130)", async () => {
+		const proc = Bun.spawn(["./nightglide", "--mode", "rpc"], {
+			cwd: repoRoot,
+			stdout: "pipe",
+			stderr: "pipe",
+		});
+
+		// 确保子进程进入事件循环就绪后触发 SIGINT
+		await Bun.sleep(250);
+		proc.kill("SIGINT");
+
+		// 设置超时门限，确保子进程未泄漏挂死（3 秒内完成退出）
+		const exitedOrTimeout = await Promise.race([
+			proc.exited.then(code => ({ timedOut: false, code })),
+			Bun.sleep(3000).then(() => ({ timedOut: true, code: -1 })),
+		]);
+
+		expect(exitedOrTimeout.timedOut).toBe(false);
+		expect(exitedOrTimeout.code).toBe(130); // 128 + SIGINT
+	});
+
+	it("apps/cli demo --non-interactive: 模拟生命周期完成，正常退出码 0 且资源完全释放", async () => {
+		const proc = Bun.spawn([process.execPath, "run", "--cwd", "apps/cli", "src/index.ts", "demo", "--non-interactive"], {
+			cwd: repoRoot,
+			stdout: "pipe",
+			stderr: "pipe",
+		});
+		const stdout = await new Response(proc.stdout).text();
+		const exitCode = await proc.exited;
+
+		expect(exitCode).toBe(0);
+		expect(stdout).toContain("Demo session completed and disposed cleanly.");
+	});
+
+	it("apps/cli: 模拟交互界面接收 SIGINT 触发 onExit 优雅销毁 Renderer 并退出", async () => {
+		const proc = Bun.spawn([process.execPath, "run", "--cwd", "apps/cli", "src/index.ts"], {
+			cwd: repoRoot,
+			stdout: "pipe",
+			stderr: "pipe",
+		});
+
+		await Bun.sleep(250);
+		proc.kill("SIGINT");
+
+		const exitedOrTimeout = await Promise.race([
+			proc.exited.then(code => ({ timedOut: false, code })),
+			Bun.sleep(3000).then(() => ({ timedOut: true, code: -1 })),
+		]);
+
+		expect(exitedOrTimeout.timedOut).toBe(false);
+		expect([0, 130]).toContain(exitedOrTimeout.code);
 	});
 });

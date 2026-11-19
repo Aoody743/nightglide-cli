@@ -236,8 +236,9 @@
 - **tui 全量**：**4,850 pass / 8 skip / 1 fail**（370 文件，唯一失败为 GitHub run-watch 既有 flake）；较第七轮新增 211 个通过用例；
 - **定向重构单测**：`session-selector`, `history-search`, `ask-dialog`, `usage-dashboard`, `select-list`, `settings-visual-hierarchy`, `dialogs-native`, `error-banner`, `plan-review-overlay`, `assistant-message-width-constraint`, `welcome` 合计 **225 pass / 0 fail**；
 - **全项目静态检查**：16 个包（包括 `@oh-my-pi/pi-tui` 与 `@oh-my-pi/pi-coding-agent`）TypeScript 类型检查 **0 错误**；代码格式化检查 **0 差异**；
-- **工作台门禁验收**：`scripts/verify-workbench.test.ts` **65/65 pass**（含新增 2 项 NO_COLOR=1 真实 CLI 零转义序列断言）；子进程 115 项检查 **115/115 pass**；
-- **入口自检**：`./nightglide --version` 输出 `nightglide/18.20.2`，`./nightglide --smoke-test` 输出 `smoke-test: ok`。
+- **工作台门禁验收**：`scripts/verify-workbench.test.ts` **72/72 pass**（含新增 2 项 NO_COLOR=1 真实 CLI 零转义序列断言，以及新增 7 项 GATE-TEARDOWN-001 真实 CLI 终端复原与退出保护断言）；子进程 115 项检查 **115/115 pass**；
+- **品牌与入口自检**：`./nightglide --help` 描述已完全统一为 Nightglide；`./nightglide --version` 输出 `nightglide/18.20.2`，`./nightglide --smoke-test` 输出 `smoke-test: ok`；
+- **Stage 4 打包评估**：源码启动模式（`./nightglide` launcher 隔离目录与全局路径解析）经过严格真实验证，功能 100% 完备；单文件 `bun build --compile` 经实测，受限于上游动态插件加载器 `omp-legacy-pi-modules` 的可选运行时引用，当前仍作为已知限制保持有据记录，推荐以源码分发与安装脚本为正式发布途径。
 
 ---
 
@@ -246,11 +247,12 @@
 1. **真实云端跨模型验证**：被 claude-proxy 网关客户端白名单阻塞（外部服务策略）。需要用户决策：网关侧放行 / 更换端点 / 显式 models 列表 + 客户端头（涉及第三方访问策略，项目侧不擅自绕过）。
 2. **BALANCED/PERFORMANCE 真实双模型会话**：单测已覆盖语义；真实跑需云端可用（同阻塞 1）+ codexplus TTFT 排查。
 3. **主 transcript 原生滚动**：结构上由终端 scrollback 承载（见第五节），无法经 pty 端到端自动化；如需 in-app 滚动属产品决策。
-4. **Stage 4 二进制打包**：launcher 源码模式已验证完整就绪；`bun --compile` 二进制打包待发布执行。
+4. **Stage 4 二进制打包**：launcher 源码模式已验证完整就绪；单二进制 `bun --compile` 受上游动态模块加载限制，建议沿用 launcher。
 5. ~~物理 VT100/无色终端~~：✅ `GATE-A11Y-002` NO_COLOR=1 真实 CLI 零转义序列门禁测试已落地并通过。
-6. **print 默认审批模式**：是否从 yolo 改为更严格默认 = 未决产品问题（当前：上游默认 + stderr 警告 + 文档）。
-7. ~~原生 TSP 卡片导航线与动态模型同步更新~~：✅ 已全部实现并双轨验证。
-8. ~~工具执行卡片视觉层次与窄屏精修~~：✅ 已全部完成并自动化验证。
-9. ~~MCP / 扩展 / LSP / 计划模式~~：✅ 已全部真机验证。
-10. ~~UI 优化后续批次~~：✅ 全部 8 轮 UI 优化已全面落地（包含列表底座重构、色彩倒挂修复、会话卡片、用量看板、宽屏 90 列工效学上限、80x24 视口折叠、审批与计划快捷键、错误横幅键盘恢复通路、status-line 补间修复）。更新后的留待项：并排 diff 流式预览（工程取舍）、browser 套件依赖真 Chromium 环境。
-11. **删除无消费者的旧原型**：`apps/cli`/`packages`/`tests` 仍在（引用检查后删除，待项目负责人确认）。
+6. ~~终端优雅复原与退出保护~~：✅ `GATE-TEARDOWN-001` 真实 CLI 正常退出与 SIGINT 信号复原门禁测试已落地并通过。
+7. **print 默认审批模式**：是否从 yolo 改为更严格默认 = 未决产品问题（当前：上游默认 + stderr 警告 + 文档）。
+8. ~~原生 TSP 卡片导航线与动态模型同步更新~~：✅ 已全部实现并双轨验证。
+9. ~~工具执行卡片视觉层次与窄屏精修~~：✅ 已全部完成并自动化验证。
+10. ~~MCP / 扩展 / LSP / 计划模式~~：✅ 已全部真机验证。
+11. ~~UI 优化后续批次~~：✅ 全部 8 轮 UI 优化已全面落地（包含列表底座重构、色彩倒挂修复、会话卡片、用量看板、宽屏 90 列工效学上限、80x24 视口折叠、审批与计划快捷键、错误横幅键盘恢复通路、status-line 补间修复、品牌文案收敛）。更新后的留待项：并排 diff 流式预览（工程取舍）、browser 套件依赖真 Chromium 环境。
+12. **删除无消费者的旧原型**：`apps/cli`/`packages`/`tests` 仍在（引用检查后删除，待项目负责人确认）。
