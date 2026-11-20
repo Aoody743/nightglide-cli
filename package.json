@@ -1,33 +1,16 @@
 {
-  "name": "nightglide-monorepo",
+  "name": "nightglide",
   "version": "0.1.0",
   "private": true,
-  "workspaces": [
-    "packages/*",
-    "apps/*"
-  ],
   "scripts": {
     "nightglide": "./nightglide",
     "ng": "./nightglide",
     "start": "./nightglide",
-    "omp": "bun --cwd=vendor/omp/packages/coding-agent src/cli.ts",
-    "dev": "bun run --cwd apps/cli dev",
-    "demo": "bun run --cwd apps/cli demo",
-    "doctor": "bun run --cwd apps/cli doctor",
-    "typecheck": "tsc --noEmit",
-    "test": "bun test",
-    "build": "bun run --cwd apps/cli build"
+    "omp": "./nightglide",
+    "verify": "bun run scripts/verify-workbench.ts",
+    "test": "bun test ./scripts"
   },
   "devDependencies": {
-    "@types/bun": "latest",
-    "@types/react": "^19.0.0",
-    "typescript": "^5.8.0"
-  },
-  "dependencies": {
-    "@oh-my-pi/pi-coding-agent": "18.20.2",
-    "@opentui/core": "0.9.0",
-    "@opentui/react": "0.9.0",
-    "react": "^19.3.0",
-    "ws": "^8.23.0"
+    "@types/bun": "latest"
   }
 }

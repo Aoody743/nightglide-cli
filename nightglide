@@ -1,5 +1,5 @@
 #!/usr/bin/env sh
-# Nightglide launcher: runs the vendored OMP source CLI.
+# Nightglide launcher: runs the vendored OMP fork source CLI.
 #
 # Mirrors upstream's scripts/omp dev launcher: Bun reads bunfig.toml from the
 # *current* directory at startup (foreign preloads would execute inside
@@ -10,11 +10,21 @@
 # upstream preload shim (scripts/omp.ts) restore the cwd before imports run.
 set -e
 
-DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)"
-CLI="$DIR/vendor/omp/packages/coding-agent/src/cli.ts"
-PRELOAD="$DIR/vendor/omp/packages/coding-agent/scripts/omp.ts"
+# Resolve symlinks of $0 so invoking through a link (e.g. ~/bin/nightglide)
+# still finds this repository; same approach as scripts/install.sh.
+LAUNCHER_PATH="$0"
+while [ -L "$LAUNCHER_PATH" ]; do
+	LINK="$(readlink "$LAUNCHER_PATH")"
+	case "$LINK" in
+		/*) LAUNCHER_PATH="$LINK" ;;
+		*) LAUNCHER_PATH="$(dirname -- "$LAUNCHER_PATH")/$LINK" ;;
+	esac
+done
+DIR="$(CDPATH= cd -- "$(dirname -- "$LAUNCHER_PATH")" && pwd -P)"
+FORK_CLI="$DIR/vendor/omp/packages/coding-agent/src/cli.ts"
+FORK_PRELOAD="$DIR/vendor/omp/packages/coding-agent/scripts/omp.ts"
 
-[ -f "$CLI" ] || { echo "nightglide: $CLI not found; run 'git submodule update --init --recursive' and 'bun install' first." >&2; exit 1; }
+[ -f "$FORK_CLI" ] || { echo "nightglide: $FORK_CLI not found; run 'git submodule update --init --recursive' and 'bun install' first." >&2; exit 1; }
 
 export PI_RAW_BIN="nightglide"
 export OMP_APP_NAME="nightglide"
@@ -25,4 +35,4 @@ LAUNCH_DIR="${OMP_DEV_LAUNCH_DIR:-${HOME}/.omp/.dev-cwd}"
 OMP_LAUNCH_CWD=$PWD
 export OMP_LAUNCH_CWD
 cd "$LAUNCH_DIR"
-exec bun --preload "$PRELOAD" "$CLI" "$@"
+exec bun --preload "$FORK_PRELOAD" "$FORK_CLI" "$@"
