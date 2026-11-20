@@ -2,7 +2,7 @@
 
 > **"Build beyond the horizon." / "漫翔苍穹，构筑所想。"**
 
-本文适用于 **OMP 原生新主线**（`vendor/omp` 子模块路线）：Nightglide CLI 直接以源码方式运行 vendored OMP，并叠加 Nightglide 品牌、路由与主题定制。旧原型（`apps/cli` + `@nightglide/*` 工作区）的安装方式已退役，见 [DEVELOPMENT.md](DEVELOPMENT.md) 头部声明。
+Nightglide CLI 直接以源码方式运行 vendored OMP fork（`vendor/omp` 子模块），并叠加 Nightglide 品牌、路由与主题定制。
 
 ---
 
