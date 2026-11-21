@@ -1,6 +1,6 @@
 # 视觉差距审计：概念图 vs 主线现状（2026-11-20）
 
-对照：[飞行概念](../reference/flight-concept.png)、[潜水概念](../reference/dive-concept.png)、[主线实拍 120×36](visual-gap-mainline-120x36.png)（`./nightglide`，`NIGHTGLIDE_SIDEBAR=open`，Terminal.app 默认浅色配置，fork 工作区未提交版本 `558af61917+dirty`）。
+对照：[飞行概念](../reference/flight-concept.png)、[潜水概念](../reference/dive-concept.png)、主线实拍 120×36（截图已于 2026-11-20 清理，见 git 历史；`./nightglide`，`NIGHTGLIDE_SIDEBAR=open`，Terminal.app 默认浅色配置，fork 工作区未提交版本 `558af61917+dirty`）。
 
 ## 结论
 

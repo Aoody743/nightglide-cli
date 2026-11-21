@@ -7,7 +7,6 @@
     "ng": "./nightglide",
     "start": "./nightglide",
     "omp": "./nightglide",
-    "verify": "bun run scripts/verify-workbench.ts",
     "test": "bun test ./scripts"
   },
   "devDependencies": {

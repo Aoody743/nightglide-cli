@@ -10,7 +10,7 @@
 
 **Glide 全屏模式（默认；`--classic` 或设置 `nightglide.layout = classic` 改用经典模式，F2 随时切换）**：在 alt-screen 中自管整窗布局——顶栏、上下像素场景带、对话面板（应用内滚动）、信息栏（模型／强度／子智能体／状态，读真实数据）、输入卡片、状态行。已在 Terminal.app 实测流式回复、面板内滚轮回看、140×40→80×24 缩放降级、`/exit` 与 SIGTERM 干净恢复（退出时对话写回原生 scrollback）。选择它的原因见 [视觉差距审计](reviews/visual-gap-audit.md)，细节与已知问题见 [Glide 验证记录](reviews/glide-spike.md)。
 
-**经典 inline 模式**：底部 3 行场景带 + 正文旁分栏侧栏（`Ctrl+N` 循环精简／详细／收起，窄于 100 列自动让位），保留终端原生 scrollback。
+**经典 inline 模式**：OMP 原生的 inline 渲染，保留终端原生 scrollback。此前为它加的底部 3 行场景带和 `Ctrl+N` 侧栏已随 Glide 取代而删除（2026-11-20）。
 
 ## 下一步（G1–G6，详见 glide-spike.md）
 
@@ -33,10 +33,10 @@
 
 ## 验证边界
 
-- 门禁：`bun test ./scripts` 70 pass / 0 fail（需去掉代理变量，见 README）；fork 场景／侧栏／输入器测试 48 pass。
+- 启动器测试：`bun test ./scripts` 覆盖 NO_COLOR、退出与 SIGINT 复原、bunfig 隔离。Glide 有 shell／screen provider／布局参数测试。
 - 本地 oMLX（`127.0.0.1:8000`）在 Glide 验证时未运行，Glide 下的本地模型流式与工具调用尚未实测。
-- 云端调用、MCP／扩展／LSP 真实加载与 fork 全量测试未在本轮重新验证。[历史验收记录](STAGE_2_3_VERIFICATION.md) 只代表当时的提交与环境。
-- 主线截图证据见 `docs/evidence/p1-mainline/`。
+- 云端调用、MCP／扩展／LSP 真实加载与 fork 全量测试未在本轮重新验证。
+- Glide 真实终端截图见 `scripts/glide-spike/shots/`；更早轮次的证据、验收记录和样板已清理，可在 git 历史中查阅。
 
 ## 安全
 

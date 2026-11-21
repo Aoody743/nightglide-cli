@@ -9,7 +9,7 @@
 | `packages/tui/src/tui.ts` | 新增 `setScreenProvider()`：复用全屏 overlay 的 alt-screen 路径，但不算 overlay、不抢焦点，所有快捷键照常；滚轮捕获；光标/IME 归属 |
 | `packages/tui/src/components/nightglide-shell.ts` | 整窗布局：顶栏、上下场景带、对话面板（真实 transcript）、信息栏（Model/Effort/Agents/Status，读真实状态）、输入卡片（真实编辑器）、状态行；四主题配色；按终端色彩模式（真彩/256 色）输出 |
 | `packages/tui/src/components/nightglide-pixel-scene.ts` | 半块像素场景：`▀` 上下双色，平滑噪声云层/水体、光带、星点、气泡、水草 |
-| `packages/coding-agent/src/modes/interactive-mode.ts` | `NIGHTGLIDE_GLIDE=1` 启动即全屏；F2 切换；滚轮/PgUp/PgDn 回看，Enter 回到底部 |
+| `packages/coding-agent/src/modes/interactive-mode.ts` | 按 `nightglide.layout` 启动 Glide（默认）；F2 切换；滚轮/PgUp/PgDn 回看，End/Enter/点击标签回到底部 |
 | `packages/tui/src/app-keybindings.ts` | `app.nightglide.glide`（F2） |
 
 测试工具：`scripts/glide-spike/`（真实 Terminal 窗口 + PTY 注入 + 截图），截图在 `scripts/glide-spike/shots/`。
@@ -77,7 +77,7 @@
 | 回到底部 | `End`（仅回看时接管）、点击“↑ 回看中”标签、`Enter` | 单测；Terminal.app 点击与 End 均回到实时尾部（`g1-anchor-3-click-bottom`） |
 | 动画帧 | `renderTail` 接受调用方的动画帧，Glide 每次绘制传入新帧 | 单测（去掉修复即失败）；Terminal.app 转圈字形逐帧变化（`g1-spinner-frame-a/b`） |
 | 应用内复制 | 沿用 OMP `/copy`（选择器 / `code` / `cmd`），空状态提示加入 `/copy` | Terminal.app：`/copy` 在 Glide 上全屏打开，Esc 回到 Glide（`g1-copy-picker`） |
-| 布局设置 | `nightglide.layout = classic \| glide`（默认 classic，环境变量 `NIGHTGLIDE_LAYOUT`）；`--glide` / `--classic` 单次覆盖；F2 本次会话切换；`NIGHTGLIDE_GLIDE=1` 兼容 | 参数单测；Terminal.app 以 `--glide` 启动（`g1-start`），F2 往返正常，`/exit` 退出码 0 |
+| 布局设置 | `nightglide.layout = classic \| glide`（现默认 glide，环境变量 `NIGHTGLIDE_LAYOUT`）；`--glide` / `--classic` 单次覆盖；F2 本次会话切换 | 参数单测；Terminal.app 以 `--glide` 启动（`g1-start`），F2 往返正常，`/exit` 退出码 0 |
 | 测试 | `nightglide-shell.test.ts`、`nightglide-screen-provider.test.ts`（进出 alt-screen、不抢焦点、resize）、`cli-layout-flag.test.ts` | tui 4867 pass / 1 fail（既有 run-watch 抖动，单独运行通过） |
 
 ## 需要你决定

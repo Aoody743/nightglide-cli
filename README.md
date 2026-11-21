@@ -9,7 +9,7 @@ Nightglide 是基于 Oh My Pi（OMP）的终端 AI 编程助手。产品只运�
 | `vendor/omp` | OMP 18.20.2 的 Nightglide fork（子模块，分支 `codex/nightglide`），全部产品代码在这里 |
 | `nightglide` | 启动器：执行 fork 源码 CLI，带工作目录保护和外来 bunfig preload 防护 |
 | `scripts/install.sh` | 把启动器安装到 `~/.local/bin/nightglide` |
-| `scripts/verify-workbench*.ts` | 主题、对比度、视口矩阵与真实 CLI 门禁 |
+| `scripts/launcher.test.ts` | 启动器真实运行测试：NO_COLOR、退出与 SIGINT 复原、bunfig 隔离 |
 | `scripts/glide-spike/` | Glide 全屏模式的真实终端测试工具与截图 |
 | `docs/` | 产品方向、开发计划、执行规范、现状、审查与证据 |
 
@@ -22,7 +22,7 @@ Nightglide 是基于 Oh My Pi（OMP）的终端 AI 编程助手。产品只运�
 ```
 
 - **Glide 全屏模式（默认）**：直接运行即进入；`--classic` 单次改用经典模式，设置 `nightglide.layout = classic` 可长期切换；运行中按 `F2` 切换。滚轮、`PgUp`/`PgDn` 回看，`End`、`Enter` 或点击“回看中”标签回到底部；`/copy` 复制对话内容。
-- **经典模式**：终端宽度至少 100 列时，`Ctrl+N` 依次切换精简侧栏、详细侧栏和收起；更窄时侧栏自动让位。
+- **经典模式**：OMP 原生的 inline 界面，对话直接进入终端原生滚动历史。
 - `./nightglide --motion none` 关闭动效。
 - **主题**：只内置 Nightglide 的五套主题（飞行 Flight／Cloudlight，潜水 Abyss／Daybreak，以及 Aurora），默认随终端明暗在 Flight 与 Cloudlight 之间自动切换。OMP 原有的 100 多套主题已移除；旧配置里的 `dark`／`light` 会自动对应到 Flight／Cloudlight。
 
@@ -32,7 +32,7 @@ Nightglide 是基于 Oh My Pi（OMP）的终端 AI 编程助手。产品只运�
 bun test ./scripts
 ```
 
-`--smoke-test` 门禁会访问本机统计服务；如果 shell 设置了 `http_proxy` 而 `NO_PROXY` 为空，该项会因代理返回 502 而失败。
+fork 自身的测试在 `vendor/omp` 内运行（如 `cd vendor/omp/packages/tui && bun test`）。
 
 ## 文档
 

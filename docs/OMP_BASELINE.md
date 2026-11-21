@@ -4,7 +4,7 @@
 
 `vendor/omp` 是完整 OMP 源码的 Git 子模块，来自 `https://github.com/can1357/oh-my-pi.git`，固定于 **v18.20.2**，提交 `7c49c11aa5bbaf3f418406583096168ad5b8c6dc`。选这个版本是为了与旧原型现有的 OMP 依赖一致，便于建立可比基线；这不表示它一定是最新版本。之后升级必须单独验证。
 
-子模块使上游来源和版本可追溯。本机已在子模块中建立 `codex/nightglide` 开发分支（Stage 1 工作：主题、品牌、composer 形状、oMLX 提供商，见 `STAGE_1_VERIFICATION.md`）。2026-11-18 起该分支已推送到私有 fork `https://github.com/Aoody743/nightglide-omp.git`（子模块内 `origin`，上游源另存为 `upstream` remote），主仓库 `.gitmodules` 已指向该 fork；修改 OMP 源码后应推送该分支并更新主仓库子模块引用。
+子模块使上游来源和版本可追溯。本机已在子模块中建立 `codex/nightglide` 开发分支（主题、品牌、composer 形状、oMLX 提供商、路由与 Glide 界面）。2026-11-18 起该分支已推送到私有 fork `https://github.com/Aoody743/nightglide-omp.git`（子模块内 `origin`，上游源另存为 `upstream` remote），主仓库 `.gitmodules` 已指向该 fork；修改 OMP 源码后应推送该分支并更新主仓库子模块引用。
 
 ## 开发环境
 
@@ -34,4 +34,4 @@ bun run dev
 - 真实模型对话及干净环境重复构建仍需单独验证；不将旧测试或模拟响应作为证明。
 - 2026-11-18：Stage 1 全部改动在子模块 `codex/nightglide` 分支落成 5 个提交（`accccd9`…`5ae02bf`），核心回归套件 121 pass / 0 fail（含修正品牌化后的 composer shape preview 测试期望）。
 - 2026-11-18：发现子模块原为浅克隆（仅含 v18.20.2 单提交深度，无法推送），已 `git fetch --unshallow upstream` 补全上游历史后推送 `codex/nightglide` 与 `v18.20.2` 标签到私有 fork；`.gitmodules` 同步指向该 fork。
-- 2026-11-18：干净环境重复构建验证通过（见 `STAGE_2_3_VERIFICATION.md`）。注意：Stage 1 品牌化后版本横幅为 `nightglide/18.20.2`（`PI_RAW_BIN` 默认值，`cli.ts`），不再是 `omp/18.20.2`；本节早前的 `omp/18.20.2` 记录是品牌化提交之前所写。
+- 2026-11-18：干净环境重复构建验证通过（阶段验收记录已于 2026-11-20 清理，见 git 历史）。注意：Stage 1 品牌化后版本横幅为 `nightglide/18.20.2`（`PI_RAW_BIN` 默认值，`cli.ts`），不再是 `omp/18.20.2`；本节早前的 `omp/18.20.2` 记录是品牌化提交之前所写。
