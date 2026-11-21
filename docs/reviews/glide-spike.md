@@ -2,7 +2,7 @@
 
 接 [视觉差距审计](visual-gap-audit.md)。目标：验证在 OMP fork 自带的 pi-tui 引擎上做整窗布局是否可行。结论：**可行**，核心风险项已在 Terminal.app 真机验证。
 
-## 已实现（fork 工作区，未提交）
+## 已实现（fork `codex/nightglide`）
 
 | 文件 | 内容 |
 |---|---|
@@ -25,9 +25,10 @@
 ## 已知问题 / 未验证
 
 1. **本地模型未运行**：oMLX（`127.0.0.1:8000`）没有在监听，后半段只能用 `--resume` 载入旧会话测试；本地模型的流式与工具调用需在 oMLX 启动后再测。
-2. 开启鼠标捕获后，Terminal.app 中选中文字需按住 **Option(⌥) 拖动**；后续要做应用内复制。
-3. 回看时有新内容到达，视图会随之漂移（按“距底部行数”记位置），需改为锚定。
-4. 输出中的转圈/计时等 transcript 内部动画在全屏下可能不刷新（renderTail 不推进动画帧）——待查。
+2. 开启鼠标捕获后，Terminal.app 中选中文字需按住 **Option(⌥) 拖动**；应用内复制用 OMP 自带的 `/copy`（G1 已确认在 Glide 下可用）。
+3. ~~回看时视图随新内容漂移~~ —— G1 已修复（锚定）。
+4. ~~transcript 内部动画在全屏下不刷新~~ —— G1 已确认并修复（renderTail 复用旧动画帧，工具计时与转圈停住）。
+8. `!` 命令运行期间，键盘输入（含 PgUp/End）转发给该进程，这是 OMP 原有行为；此时回看只能用滚轮，回到底部可用滚轮或点击标签。
 5. 长会话性能：每帧从尾部重渲染可见区，未做缓存；未压测几百轮的会话。
 6. 亮色主题由 macOS 外观自动选择；潜水两套主题和亮色在本轮只看了配色，没有完整走查。
 7. Terminal.app 只有 256 色，场景在 iTerm2/Ghostty（真彩）下会更细腻，尚未在这些终端截图。
@@ -36,7 +37,7 @@
 
 按依赖顺序，每步结束都在真实终端截图并和概念图并排对照。
 
-**G1 收尾：把验证版变成可用版**
+**G1 收尾：把验证版变成可用版** —— 已完成（2026-11-20），见下方“G1 结果”
 - 回看锚定（新内容不打乱回看位置）、`End`/点击“回到底部”。
 - 修复全屏下 transcript 动画帧推进（转圈、计时）。
 - 应用内复制：选中模式或 `/copy` 最近回复。
@@ -68,9 +69,20 @@
 - 长会话性能（缓存已完成块的渲染结果）、多次 resize、tmux 内运行、中文输入法候选框位置。
 - 文档：更新 `CURRENT_STATE.md` 与产品规范中关于 inline/全屏的取舍。
 
+## G1 结果（2026-11-20）
+
+| 项 | 实现 | 验证 |
+|---|---|---|
+| 回看锚定 | 回看时记录视图顶部 3 行，每帧在 tail 中重新定位并修正滚动量；新输出不再把视图往前推 | 单测（去掉修复即失败）；Terminal.app：滚回后 4 秒内持续输出，视图顶部不动（`shots/g1-anchor-1/2`） |
+| 回到底部 | `End`（仅回看时接管）、点击“↑ 回看中”标签、`Enter` | 单测；Terminal.app 点击与 End 均回到实时尾部（`g1-anchor-3-click-bottom`） |
+| 动画帧 | `renderTail` 接受调用方的动画帧，Glide 每次绘制传入新帧 | 单测（去掉修复即失败）；Terminal.app 转圈字形逐帧变化（`g1-spinner-frame-a/b`） |
+| 应用内复制 | 沿用 OMP `/copy`（选择器 / `code` / `cmd`），空状态提示加入 `/copy` | Terminal.app：`/copy` 在 Glide 上全屏打开，Esc 回到 Glide（`g1-copy-picker`） |
+| 布局设置 | `nightglide.layout = classic \| glide`（默认 classic，环境变量 `NIGHTGLIDE_LAYOUT`）；`--glide` / `--classic` 单次覆盖；F2 本次会话切换；`NIGHTGLIDE_GLIDE=1` 兼容 | 参数单测；Terminal.app 以 `--glide` 启动（`g1-start`），F2 往返正常，`/exit` 退出码 0 |
+| 测试 | `nightglide-shell.test.ts`、`nightglide-screen-provider.test.ts`（进出 alt-screen、不抢焦点、resize）、`cli-layout-flag.test.ts` | tui 4867 pass / 1 fail（既有 run-watch 抖动，单独运行通过） |
+
 ## 需要你决定
 
-1. 是否把 Glide 设为默认界面（经典 inline 模式保留为选项）。
+1. ~~是否把 Glide 设为默认界面~~ —— 已定：Glide 为默认（2026-11-20），经典模式用 `--classic` 或设置切换。
 2. 四主题映射是否按上面的方案。
 3. 是否现在把 fork 与主仓的现有改动分批提交到分支。
 4. 启动 oMLX 后我再用本地模型补测流式和工具调用。

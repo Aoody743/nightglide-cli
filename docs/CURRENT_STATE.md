@@ -8,22 +8,26 @@
 
 ## 界面
 
-**Glide 全屏模式（验证版，`NIGHTGLIDE_GLIDE=1` 或 F2）**：在 alt-screen 中自管整窗布局——顶栏、上下像素场景带、对话面板（应用内滚动）、信息栏（模型／强度／子智能体／状态，读真实数据）、输入卡片、状态行。已在 Terminal.app 实测流式回复、面板内滚轮回看、140×40→80×24 缩放降级、`/exit` 与 SIGTERM 干净恢复（退出时对话写回原生 scrollback）。选择它的原因见 [视觉差距审计](reviews/visual-gap-audit.md)，细节与已知问题见 [Glide 验证记录](reviews/glide-spike.md)。
+**Glide 全屏模式（默认；`--classic` 或设置 `nightglide.layout = classic` 改用经典模式，F2 随时切换）**：在 alt-screen 中自管整窗布局——顶栏、上下像素场景带、对话面板（应用内滚动）、信息栏（模型／强度／子智能体／状态，读真实数据）、输入卡片、状态行。已在 Terminal.app 实测流式回复、面板内滚轮回看、140×40→80×24 缩放降级、`/exit` 与 SIGTERM 干净恢复（退出时对话写回原生 scrollback）。选择它的原因见 [视觉差距审计](reviews/visual-gap-audit.md)，细节与已知问题见 [Glide 验证记录](reviews/glide-spike.md)。
 
 **经典 inline 模式**：底部 3 行场景带 + 正文旁分栏侧栏（`Ctrl+N` 循环精简／详细／收起，窄于 100 列自动让位），保留终端原生 scrollback。
 
 ## 下一步（G1–G6，详见 glide-spike.md）
 
-1. **G1 收尾**：回看锚定、全屏下 transcript 动画帧推进、应用内复制、`nightglide.layout = glide | classic` 设置与 `--classic`、screen provider 单元测试。
+1. ~~**G1 收尾**~~：已完成（2026-11-20）——回看锚定、End／点击回到底部、全屏动画帧、`/copy`、`nightglide.layout` 与 `--glide`/`--classic`、screen provider 测试。
 2. **G2 场景精修**：视差云层、潜水光柱水草气泡、思考强度联动、真彩终端调参。
 3. **G3 内容卡片**：用户消息卡、回复标题、工具 chip、diff 卡片、审批框统一。
 4. **G4 机器人与信息栏**：像素机器人三态、强度彩条、子智能体实时状态、任务总结入口。
 5. **G5 四主题定稿**：映射待定（flight / cloudlight / abyss / daybreak，aurora 额外保留），亮暗截图矩阵。
 6. **G6 稳定性**：长会话性能、tmux、中文输入法候选框位置。
 
+## 主题
+
+只内置 Nightglide 的五套主题：nightglide-flight（默认暗色）、nightglide-cloudlight（默认亮色）、nightglide-abyss、nightglide-daybreak、nightglide-aurora。OMP 原有的 dark、light 和 100 套主题包已于 2026-11-20 删除；`dark`／`light` 等旧名称作为不列出的别名，分别加载 Flight／Cloudlight，旧配置与扩展不会因此报错。用户自定义主题（`~/.omp/agent/themes/*.json`）仍然可用。同轮修复：五套主题的代码块标题行对比度过低（约 1.5:1，提高到 3.5–4.3:1）；ASCII 符号模式下主题自带的 Unicode 转圈不再覆盖 ASCII。
+
 ## 待决
 
-- 是否把 Glide 设为默认界面（经典模式保留为选项）。
+- ~~是否把 Glide 设为默认界面~~：已定为默认（2026-11-20）。
 - 四主题映射。
 - 五档思考强度现场展示需要支持可调 thinking level 的模型凭据（本地 `omlx/endless` 不支持）。
 

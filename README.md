@@ -21,9 +21,10 @@ Nightglide 是基于 Oh My Pi（OMP）的终端 AI 编程助手。产品只运�
 ./nightglide
 ```
 
-- **Glide 全屏模式**（验证版）：`NIGHTGLIDE_GLIDE=1 ./nightglide` 启动即进入；运行中按 `F2` 切换。滚轮、`PgUp`/`PgDn` 在对话面板内回看，`Enter` 回到底部。
+- **Glide 全屏模式（默认）**：直接运行即进入；`--classic` 单次改用经典模式，设置 `nightglide.layout = classic` 可长期切换；运行中按 `F2` 切换。滚轮、`PgUp`/`PgDn` 回看，`End`、`Enter` 或点击“回看中”标签回到底部；`/copy` 复制对话内容。
 - **经典模式**：终端宽度至少 100 列时，`Ctrl+N` 依次切换精简侧栏、详细侧栏和收起；更窄时侧栏自动让位。
 - `./nightglide --motion none` 关闭动效。
+- **主题**：只内置 Nightglide 的五套主题（飞行 Flight／Cloudlight，潜水 Abyss／Daybreak，以及 Aurora），默认随终端明暗在 Flight 与 Cloudlight 之间自动切换。OMP 原有的 100 多套主题已移除；旧配置里的 `dark`／`light` 会自动对应到 Flight／Cloudlight。
 
 ## 测试
 
