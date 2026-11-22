@@ -34,7 +34,8 @@
 ## 验证边界
 
 - 启动器测试：`bun test ./scripts` 覆盖 NO_COLOR、退出与 SIGINT 复原、bunfig 隔离。Glide 有 shell／screen provider／布局参数测试。
-- 本地 oMLX（`127.0.0.1:8000`）在 Glide 验证时未运行，Glide 下的本地模型流式与工具调用尚未实测。
+- 本地 oMLX（`omlx/endless`）在 Glide 下流式回复与推理显示已实测（2026-11-22）；工具调用未测。启动器会把本机地址加入 `NO_PROXY`，避免 shell 代理拦截本地模型请求。
+- `/theme <名称>` 可直接切换主题（保存到当前背景对应的 `theme.dark`/`theme.light`）。
 - 云端调用、MCP／扩展／LSP 真实加载与 fork 全量测试未在本轮重新验证。
 - Glide 真实终端截图见 `scripts/glide-spike/shots/`（G2 在 `shots/g2/`，渲染预览在 `shots/g2-preview/`）；本机无真彩终端，真彩场景只有渲染预览；更早轮次的证据、验收记录和样板已清理，可在 git 历史中查阅。
 

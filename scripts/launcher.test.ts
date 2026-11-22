@@ -85,7 +85,8 @@ describe("launcher · GATE-TEARDOWN-001: 终端优雅复原真实 CLI 自动化�
 
 		expect(exitCode).toBe(0);
 		expect(stdout).toContain("smoke-test: ok");
-	});
+		// A cold smoke test (worker spawn + tiny-model subprocess) takes 3–6 s, past bun's 5 s default.
+	}, 20_000);
 
 	it("./nightglide --mode rpc: 模拟 SIGINT (Ctrl+C) 优雅复原终端并恢复退出状态 (130)", async () => {
 		const proc = Bun.spawn(["./nightglide", "--mode", "rpc"], {

@@ -24,7 +24,7 @@
 
 ## 已知问题 / 未验证
 
-1. **本地模型未运行**：oMLX（`127.0.0.1:8000`）没有在监听，后半段只能用 `--resume` 载入旧会话测试；本地模型的流式与工具调用需在 oMLX 启动后再测。
+1. ~~本地模型未运行~~：2026-11-22 已用 oMLX 实测流式回复，见文末“本地模型实测”。工具调用仍未测。
 2. 开启鼠标捕获后，Terminal.app 中选中文字需按住 **Option(⌥) 拖动**；应用内复制用 OMP 自带的 `/copy`（G1 已确认在 Glide 下可用）。
 3. ~~回看时视图随新内容漂移~~ —— G1 已修复（锚定）。
 4. ~~transcript 内部动画在全屏下不刷新~~ —— G1 已确认并修复（renderTail 复用旧动画帧，工具计时与转圈停住）。
@@ -122,3 +122,24 @@ fork 基于 `23258c3ffb`（未提交），改动在 `nightglide-pixel-scene.ts`�
 - 检查时发现：状态栏底部这一路的上下文总带时间戳，`publishAmbientEffort` 在这条路径上本来就不发布强度（上游既有行为），所以隐藏模型段不改变对话区思考动画的取色。
 
 验证：单测 `status-line-hosted.test.ts`（隐藏与恢复）、`nightglide-shell.test.ts`（宽窄切换时上报侧栏可见性、无模型提示）；tui／coding-agent 类型检查通过；Terminal.app 140×40 底部状态栏无模型段、90×30 侧栏收起后模型段回到底部（`shots/g2/sidebar-flight-a`、`sidebar-narrow-90-a`、`sidebar-abyss-a`）。有真实模型、回退、子智能体时的侧栏只用模拟数据检查过排版，未在真实会话中截图（隔离目录无凭据）。
+
+## 本地模型实测、代理修复与 `/theme`（2026-11-22）
+
+**本地模型（oMLX `omlx/endless`，Terminal.app 140×40，用户真实配置）**
+- 直接请求 oMLX：回复里带 `reasoning_content`（381 个输出 token 里有 375 个是推理），答案正确。
+- 在 Nightglide 中：推理过程以斜体显示，答案正确（`391`、`144`），后续的 "hi"、"你好" 也正常回复（`shots/live/omlx-04`、`launcher-06`）。
+- 强度：`endless` 是通过模型列表自动发现的，没有可调思考强度（`model.thinking` 为空），所以侧栏显示“此模型不支持”，场景不按强度加效果。此前在 auto 配置下侧栏会一直停在“auto · 本轮确定后显示”，已修复：只有支持思考控制的模型才显示 auto 待定。**按强度变化的动画仍需要一个支持可调强度的模型来实测**。
+- 工具调用未测。
+
+**根因：shell 代理拦截了本机请求**
+- 用户的 shell 设置了 `HTTP(S)_PROXY`/`ALL_PROXY=127.0.0.1:17891`，`NO_PROXY` 为空。Bun 的 `fetch` 会读取这些变量，于是发往 `127.0.0.1` 的请求（oMLX、Ollama、LM Studio 的模型发现与对话）都经过了代理。代理连不到本机服务，表现为启动时模型发现超时、发消息后一直显示 “Working…”。用 curl 经同一代理请求 oMLX 同样超时；加上 `--noproxy` 则 0.02 秒返回。
+- 修复：`./nightglide` 启动时把 `127.0.0.1,localhost,::1` 追加进 `NO_PROXY`/`no_proxy`，保留用户已有条目。修复后本机服务不再超时（没启动的服务立即返回连接被拒绝），按平时方式启动可以正常对话。
+- 顺带：同一原因下，原版启动器的 `--smoke-test` 要 64 秒并以失败退出，修复后 3–6 秒成功；启动器测试中该用例的时限放宽到 20 秒（冷启动超过 bun 默认的 5 秒）。
+
+**`/theme` 命令（fork 新增 `slash-commands/builtin-theme.ts`）**
+- `/theme <名称>`：接受全名或 Nightglide 短名（`flight`、`cloudlight`、`abyss`、`daybreak`、`aurora`，可用 Tab 补全），也接受用户自定义主题的全名。写入当前终端背景对应的槽位（`theme.dark` 或 `theme.light`），与在 `/settings` 里修改的保存方式相同，并立即生效。
+- `/theme`（不带参数）：列出可用主题并标出当前主题。
+- 未知名称给出可用列表，并以失败状态结束（print 模式下退出码非 0）。
+- 验证：单测（名称解析）；Terminal.app 隔离配置下 `/theme abyss` 从 Cloudlight 立即切换为 Abyss，配置文件写入 `theme.light: nightglide-abyss`（`shots/live/theme-02`）。
+
+另：用户真实配置里的 `theme.dark: titanium` 是不存在的主题，日志显示会回退；Terminal.app 是亮色背景所以平时用的是 `theme.light`，不受影响。

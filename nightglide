@@ -26,6 +26,17 @@ FORK_PRELOAD="$DIR/vendor/omp/packages/coding-agent/scripts/omp.ts"
 
 [ -f "$FORK_CLI" ] || { echo "nightglide: $FORK_CLI not found; run 'git submodule update --init --recursive' and 'bun install' first." >&2; exit 1; }
 
+# Bun's fetch honors HTTP(S)_PROXY / ALL_PROXY. With an empty NO_PROXY, local
+# model servers (oMLX, Ollama, LM Studio on 127.0.0.1) are sent through that
+# proxy, which typically cannot reach the user's loopback: discovery times out
+# and requests hang on "Working…". Always exempt loopback, keeping any entries
+# the user already set.
+for host in 127.0.0.1 localhost ::1; do
+	case ",${NO_PROXY:-}," in *",$host,"*) ;; *) NO_PROXY="${NO_PROXY:+$NO_PROXY,}$host" ;; esac
+	case ",${no_proxy:-}," in *",$host,"*) ;; *) no_proxy="${no_proxy:+$no_proxy,}$host" ;; esac
+done
+export NO_PROXY no_proxy
+
 export PI_RAW_BIN="nightglide"
 export OMP_APP_NAME="nightglide"
 
