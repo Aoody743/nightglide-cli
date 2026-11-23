@@ -29,7 +29,7 @@ export PI_CODING_AGENT_DIR=$root/agent NG_FIFO=$fifo
 python3 "${0:A:h}/relay.py" "${0:A:h}/../../nightglide" ${(j: :)${(q)@}}
 EOF
 chmod +x $root/run.command
-osascript -e 'tell application "Terminal"' -e "do script \"$root/run.command; exit\"" -e 'end tell' >/dev/null
+osascript -e 'tell application "Terminal"' -e "set t to do script \"$root/run.command; exit\"" -e 'if exists settings set "Nightglide" then set current settings of t to settings set "Nightglide"' -e 'end tell' >/dev/null
 sleep 12
 wid=$(osascript -e 'tell application "Terminal" to id of front window')
 screencapture -o -l $wid "$out-a.png"

@@ -1,6 +1,6 @@
 # Nightglide 项目现状
 
-更新时间：2026-11-21。本文是工作区快照，不是完整功能或安全审计；代码变化后须同步更新。
+更新时间：2026-11-23。本文是工作区快照，不是完整功能或安全审计；代码变化后须同步更新。
 
 ## 结构
 
@@ -8,14 +8,24 @@
 
 ## 界面
 
-**Glide 全屏模式（默认；`--classic` 或设置 `nightglide.layout = classic` 改用经典模式，F2 随时切换）**：在 alt-screen 中自管整窗布局——顶栏、上下像素场景带、对话面板（应用内滚动）、信息栏（模型／强度／子智能体／状态，读真实数据；侧栏显示时底部状态栏不再重复模型）、输入卡片、状态行。已在 Terminal.app 实测流式回复、面板内滚轮回看、140×40→80×24 缩放降级、`/exit` 与 SIGTERM 干净恢复（退出时对话写回原生 scrollback）。选择它的原因见 [视觉差距审计](reviews/visual-gap-audit.md)，细节与已知问题见 [Glide 验证记录](reviews/glide-spike.md)。
+**Glide 全屏界面（唯一的交互界面）**：在 alt-screen 中自管整窗布局——顶栏、上下像素场景带、对话面板（应用内滚动）、信息栏（模型／强度／子智能体／状态，读真实数据；侧栏显示时底部状态栏不再重复模型）、输入卡片、状态行。已在 Terminal.app 实测流式回复、面板内滚轮回看、140×40→80×24 缩放降级、`/exit` 与 SIGTERM 干净恢复（退出时对话写回原生 scrollback）。选择它的原因见 [视觉差距审计](reviews/visual-gap-audit.md)，细节与已知问题见 [Glide 验证记录](reviews/glide-spike.md)。
 
-**经典 inline 模式**：OMP 原生的 inline 渲染，保留终端原生 scrollback。此前为它加的底部 3 行场景带和 `Ctrl+N` 侧栏已随 Glide 取代而删除（2026-11-20）。
+**经典 inline 模式**：已于 2026-11-22 移除入口（F2、`--classic`、`nightglide.layout`、`NIGHTGLIDE_LAYOUT`）。旧配置里的 `nightglide.layout` 仍可加载，但不再生效。print／RPC 等非交互模式不受影响。
 
-## 下一步（G1–G6，详见 glide-spike.md）
+**品牌**：窗口标题与状态栏的标识为 `✦`（ASCII 符号集为 `ng`）；帮助、提示、报错和示例中的命令名为 `nightglide`。`~/.omp` 数据目录、`@oh-my-pi/*` 包名、`OMP_*` 环境变量、日志文件名 `omp.*.log` 保留不变。启动时不再弹出上游 OMP 更新日志；`nightglide update` 只提示用 git 更新。
 
-1. ~~**G1 收尾**~~：已完成（2026-11-20）——回看锚定、End／点击回到底部、全屏动画帧、`/copy`、`nightglide.layout` 与 `--glide`/`--classic`、screen provider 测试。
-2. ~~**G2 场景精修**~~：已完成（2026-11-21，fork 未提交）——飞行近远两层视差与细光带、潜水光柱／水草／气泡、按实际生效强度联动、四主题 256 色专用配色、`--motion none` 静帧。真彩只做了渲染预览，未在真彩终端实测（见 glide-spike.md“G2 结果”）。
+**版本**：产品版本从 v1.0 起算，当前为 **v1.0 beta1**（`1.0.0-beta.1`，见根 `package.json` 与 fork 的 `PRODUCT_VERSION`），用于 `--version`、帮助标题和欢迎横幅。fork 内部的 `VERSION` 仍是上游 18.20.2，浏览器扩展、插件兼容和更新日志比较依赖它，不改。
+
+**字体**：推荐 NeoX Mono；终端程序不能自选字体，由 `scripts/terminal-profile.sh` 建立 Terminal.app 的 “Nightglide” 描述文件（NeoX Mono 14pt），截图脚本会自动使用它。见 [安装说明](INSTALL.md)。
+
+## 下一步
+
+按 [开发计划](DEVELOPMENT_PLAN.md) 的顺序：~~品牌化~~（已完成，截图验收待补）→ **P3.3 审批策略**（下一项，现在默认 `yolo`）→ 菜单与设置简化 → G3 → G4 → P3.1／3.2 → G5 → 交互基线与 G6 → P4。
+
+界面各阶段（G1–G6，详见 glide-spike.md）：
+
+1. ~~**G1 收尾**~~：已完成（2026-11-20）——回看锚定、End／点击回到底部、全屏动画帧、`/copy`、布局设置（`--classic` 等入口已随品牌化移除）、screen provider 测试。
+2. ~~**G2 场景精修**~~：已完成（2026-11-21）——飞行近远两层视差与细光带、潜水光柱／水草／气泡、按实际生效强度联动、四主题 256 色专用配色、`--motion none` 静帧。真彩只做了渲染预览，未在真彩终端实测（见 glide-spike.md“G2 结果”）。
 3. **G3 内容卡片**：用户消息卡、回复标题、工具 chip、diff 卡片、审批框统一。
 4. **G4 机器人与信息栏**：像素机器人三态、强度彩条、子智能体实时状态、任务总结入口。
 5. **G5 四主题定稿**：映射待定（flight / cloudlight / abyss / daybreak，aurora 额外保留），亮暗截图矩阵。

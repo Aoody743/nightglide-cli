@@ -60,8 +60,21 @@ bash scripts/install.sh --prefix /usr/local
 验证安装：
 
 ```bash
-nightglide --version   # 预期输出: nightglide/18.20.2
+nightglide --version   # 预期输出: nightglide/1.0.0-beta.1
 ```
+
+## 4.5 字体（NeoX Mono，可选）
+
+Nightglide 的推荐字体是 **NeoX Mono**。终端程序无法自己指定字体，字体由终端的描述文件决定。字体版权保留所有权利，仓库不附带字体文件，需自行安装。
+
+```bash
+# 在 Terminal.app 新建/更新名为 “Nightglide” 的描述文件（NeoX Mono 14pt，140×40），不改默认
+scripts/terminal-profile.sh
+# 同时设为 Terminal.app 的默认与启动描述文件
+scripts/terminal-profile.sh --default
+```
+
+iTerm2：Settings › Profiles › Text › Font 选 “NeoX Mono 1.4”。Ghostty：在配置中写 `font-family = "NeoX Mono 1.4"`。NeoX Mono 只有 Regular 一个字重，粗体由终端合成。
 
 ## 5. 冒烟验证
 
