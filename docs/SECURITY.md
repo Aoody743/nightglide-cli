@@ -4,10 +4,14 @@
 
 ## 1. 工具审批（已实测）
 - 审批由 OMP 原生引擎执行，模式 `always-ask` / `always-ask-cached` / `write` / `yolo`（`--approval-mode` 或 `tools.approvalMode`）。
-- **schema 默认值为 `yolo`**：无任何配置时写入/命令直接放行。TUI 与 headless 皆然。
+- **默认值为 `write`（高风险询问，2026-11-24 起）**：读、写自动执行；命令（bash、`eval`）、`task`、危险命令要询问；没有界面时这些调用被拒绝。上游 OMP 默认是 `yolo`。
+- **`~/.omp` 默认受限**（`tools.restrictedFolders: ["~/.omp"]`）：任何档位下对它的操作都每次询问、不能记住，防止智能体改自己的配置提权。
+- **项目配置不能放宽审批**：`<项目>/.omp/config.yml` 里的 `tools.approvalMode`、`tools.approval`、`tools.restrictedFolders` 只能收紧。
+- **`yolo` 下危险命令也不询问**（OMP 设计，上游 v19.1.1 相同；2026-11-23 已用代码调用验证）：bash 的危险命令判定（`rm -rf /`、`sudo rm`、`curl … | sh`、`mkfs` 等）在 `always-ask`／`write` 下每次询问，在 `yolo` 下直接放行。
+- **子智能体以 `yolo` 运行**（OMP 设计）：父会话批准 `task` 即为授权边界。
+- 详见 [P3.3 审批策略](reviews/p3.3-approval-policy.md)。
 - TUI 审批对话框有防误触 arm 窗口（挂载后短时间忽略 Enter，防止提交 prompt 的按键误当审批）——已在真实终端验证：`write` 工具经 Approve → 文件真实落盘、内容精确匹配。
-- **headless（print/-p）提示**：当生效值为 yolo 且用户没有任何显式审批配置（旗标/env/任意层设置/per-tool 条目）时，stderr 输出一行警告并给出收紧方法；已实测两种路径。
-- print 模式在显式 `always-ask` 下：write/bash/edit/eval 全部被拦截并向模型返回明确的"需要审批但无交互 UI"错误（已实测）。是否将 headless 默认改为更严格模式是**未决产品问题**（当前保持上游 yolo 默认 + 警告）。
+- **headless（print/-p、RPC、ACP）**：需要询问的调用直接拒绝，并向模型返回“需要审批但无交互 UI”的错误（2026-11-24 用本地模型实测）。要全自动运行，需传 `--auto-approve` 或 `--approval-mode yolo`。原先的 headless `yolo` 警告已删除。
 
 ## 2. 模型路由与隐私（LOCAL 模式已实测）
 - `nightglide.routingMode`（默认 `manual` = 不改变任何行为）：`local` 将 10 个会话角色与子智能体 `@role` 解析绑定到本地模型（回环 baseUrl 或已知本地 provider），回退链仅含本地模型；无本地模型时启动快速失败；per-call 云端模型被拒绝。已在真实会话验证主会话与 task 子智能体均落在 `omlx/endless`。
@@ -21,6 +25,6 @@
 
 ## 4. 对外表述限制
 
-- 用户期望的“高风险操作询问”是未来要求，不是当前默认行为（默认 `yolo`）。
+- “高风险询问”是按规则判断，不是沙箱：工作区外的写入（`~/.omp` 除外）、MCP 工具、联网读取仍自动执行。
 - LOCAL 模式不等于所有联网功能、扩展或本地代理都不外发，不能宣传“绝对不出机”。
 - fork 沿用 OMP 的配置、凭据和会话体系，不能宣称与现有 OMP 数据隔离。
