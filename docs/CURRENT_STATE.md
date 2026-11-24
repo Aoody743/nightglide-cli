@@ -41,11 +41,13 @@
 
 只内置 Nightglide 的五套主题（Aurora 有自己的场景和启动动画，见下）：nightglide-flight（默认暗色）、nightglide-cloudlight（默认亮色）、nightglide-abyss、nightglide-daybreak、nightglide-aurora。OMP 原有的 dark、light 和 100 套主题包已于 2026-11-20 删除；`dark`／`light` 等旧名称作为不列出的别名，分别加载 Flight／Cloudlight，旧配置与扩展不会因此报错。用户自定义主题（`~/.omp/agent/themes/*.json`）仍然可用。同轮修复：五套主题的代码块标题行对比度过低（约 1.5:1，提高到 3.5–4.3:1）；ASCII 符号模式下主题自带的 Unicode 转圈不再覆盖 ASCII。
 
+**飞行与潜水场景**（2026-11-24 重做）：飞行——顶部是夜空（Cloudlight 为白天），有月亮（太阳）和柔和光晕、高空薄云与星星；底部是三层漂移的云海，云团圆顶、受光边缘和暗部，近层漂得最快，思考强度越高云团越高、边缘越亮。潜水——顶部是从水下看到的水面：闪动的水面线、游移的焦散光斑和斜射光束；底部是礁石、沙地、摇曳的海草、珊瑚和上升的气泡。真彩下平滑渐变，256 色终端用克制的网格配色。
+
 **Aurora 场景**（2026-11-24，第二版）：顶部是平滑渐变的极光帘幕——下缘最亮、光束高低不一、向上由绿转紫，帘幕之间只变暗不断开，下方有柔和光晕；底部是两层山脉（远山亮脊线、近山剪影）和地平线光晕，配少量星星。启动或切换到 Aurora 时，帘幕从左向右被点亮（约 3.5 秒）；关闭动效时直接显示完整画面。256 色终端用一套更克制的配色。
 
 **界面顶部**：不再有“✦ Nightglide ··· [主题名]”标题行，顶部场景从窗口最上沿开始。
 
-**场景像素**：默认每格上下两个像素（`▀` 半格）。Terminal.app 用字体自带的方块字符，NeoX Mono 下像素之间有缝，所以在 Terminal.app 中自动改为每格一个像素（只填背景色，清晰但较粗）；`NIGHTGLIDE_SCENE_PIXELS=1|2` 可覆盖。iTerm2、Ghostty 自己绘制方块且支持真彩，效果最精细（见 [安装说明](INSTALL.md)）。截图与预览在 `scripts/glide-spike/shots/aurora-v2/`；Terminal.app 已实测，真彩终端只有渲染预览。
+**场景像素**：默认每格上下两个像素（`▀` 半格）。Terminal.app 用字体自带的方块字符，NeoX Mono 下像素之间有缝，所以在 Terminal.app 中自动改为每格一个像素（只填背景色，清晰但较粗）；`NIGHTGLIDE_SCENE_PIXELS=1|2` 可覆盖。iTerm2、Ghostty 自己绘制方块且支持真彩，效果最精细（见 [安装说明](INSTALL.md)）。截图与预览在 `scripts/glide-spike/shots/aurora-v2/` 和 `shots/scenes-v2/`。Ghostty（真彩、自绘方块）实测了 Flight、Abyss、Aurora；Terminal.app 实测了 Flight、Aurora；其余主题在两种终端中只有渲染预览。
 
 ## 待决
 

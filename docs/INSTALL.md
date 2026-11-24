@@ -80,7 +80,14 @@ iTerm2：Settings › Profiles › Text › Font 选 “NeoX Mono 1.4”。Ghost
 
 顶部和底部的场景用半格方块（`▀`）把每格分成上下两个像素。
 
-- **iTerm2、Ghostty**（推荐）：终端自己绘制方块字符，并支持真彩，场景最精细、渐变平滑。
+- **iTerm2、Ghostty**（推荐）：终端自己绘制方块字符，并支持真彩，场景最精细、渐变平滑。安装 Ghostty：`brew install --cask ghostty`；字体在 `~/.config/ghostty/config` 中设置，例如：
+
+  ```
+  font-family = "NeoX Mono 1.4"
+  font-size = 14
+  window-width = 140
+  window-height = 40
+  ```
 - **Terminal.app**：用字体里的方块字符绘制，NeoX Mono 等字体的方块填不满半格，像素之间会有缝，而且只有 256 色。所以在 Terminal.app 中场景自动改为每格一个像素（只用背景色），画面清晰但颗粒较粗。
 
 需要时可用环境变量覆盖：`NIGHTGLIDE_SCENE_PIXELS=2` 强制半格（更精细），`NIGHTGLIDE_SCENE_PIXELS=1` 强制整格。
