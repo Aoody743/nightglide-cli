@@ -39,7 +39,9 @@
 
 ## 主题
 
-只内置 Nightglide 的五套主题：nightglide-flight（默认暗色）、nightglide-cloudlight（默认亮色）、nightglide-abyss、nightglide-daybreak、nightglide-aurora。OMP 原有的 dark、light 和 100 套主题包已于 2026-11-20 删除；`dark`／`light` 等旧名称作为不列出的别名，分别加载 Flight／Cloudlight，旧配置与扩展不会因此报错。用户自定义主题（`~/.omp/agent/themes/*.json`）仍然可用。同轮修复：五套主题的代码块标题行对比度过低（约 1.5:1，提高到 3.5–4.3:1）；ASCII 符号模式下主题自带的 Unicode 转圈不再覆盖 ASCII。
+只内置 Nightglide 的五套主题（Aurora 有自己的场景和启动动画，见下）：nightglide-flight（默认暗色）、nightglide-cloudlight（默认亮色）、nightglide-abyss、nightglide-daybreak、nightglide-aurora。OMP 原有的 dark、light 和 100 套主题包已于 2026-11-20 删除；`dark`／`light` 等旧名称作为不列出的别名，分别加载 Flight／Cloudlight，旧配置与扩展不会因此报错。用户自定义主题（`~/.omp/agent/themes/*.json`）仍然可用。同轮修复：五套主题的代码块标题行对比度过低（约 1.5:1，提高到 3.5–4.3:1）；ASCII 符号模式下主题自带的 Unicode 转圈不再覆盖 ASCII。
+
+**Aurora 场景**（2026-11-24）：顶部是极光帘幕——下缘亮绿、射线向上渐变为紫，缓慢飘动，后面有闪烁星空；底部是暗色山脊和发光的山脊线。启动时（或切换到 Aurora 时）帘幕从左向右扫入，前沿有一道亮光，约 3.5 秒后稳定；关闭动效时直接显示完整画面。真彩与 256 色各有配色。截图与预览在 `scripts/glide-spike/shots/aurora/`；Terminal.app（256 色）已实测，真彩终端只有渲染预览。
 
 ## 待决
 

@@ -19,13 +19,16 @@ const HEIGHT = Number(process.argv[4] ?? 40);
 const CW = 4;
 const CH = 8;
 const GAP = 12;
-const THEMES = [
+const THEMES = process.env.NG_THEMES?.split(",") ?? [
   "nightglide-flight",
   "nightglide-cloudlight",
   "nightglide-abyss",
   "nightglide-daybreak",
+  "nightglide-aurora",
 ];
-const LEVELS: (string | undefined)[] = [undefined, "low", "high", "xhigh"];
+/** NG_INTRO=1 renders the launch animation instead: columns are points in the intro. */
+const INTRO = process.env.NG_INTRO === "1";
+const LEVELS: (string | undefined)[] = INTRO ? ["medium"] : [undefined, "low", "high", "xhigh"];
 const MODES = ["truecolor", "256color"] as const;
 type Mode = (typeof MODES)[number];
 /** Terminal environments whose capability detection yields each color mode. */
@@ -38,7 +41,7 @@ const MODE_ENV: Record<Mode, Record<string, string>> = {
     WT_SESSION: "",
   },
 };
-const TIMES = [0, 60];
+const TIMES = INTRO ? [4, 9, 14, 19, 24, 34] : [0, 60];
 
 type RGB = [number, number, number];
 
@@ -175,6 +178,10 @@ async function frame(themeName: string, mode: Mode, level: string | undefined, t
     rows: () => HEIGHT,
     requestRender: () => {},
   });
+  // Prime one frame well before `time` so launch animations (Aurora's sweep) have finished.
+  // NG_INTRO starts the scene at clock 0 instead, so `time` is a point in the intro.
+  shell.setSceneTime(INTRO ? 0 : time - 1000);
+  shell.render(WIDTH);
   shell.setSceneTime(time);
   const lines = shell.render(WIDTH);
   shell.dispose();
