@@ -24,6 +24,13 @@
 - **`/more`**：列出全部命令及说明，选中后把 `/命令名 ` 填入输入框。
 - **`/settings`**：默认打开“常用”页（14 项：主题、动效、图标字符、输入框样式、思考强度、路由模式、本地模型、隐藏思考内容、审批策略、三种通知、常用命令），标签、说明和取值都是中文；这些是其他标签页里同一设置的另一种显示，保存方式不变。原有英文标签页全部保留，搜索不重复列出常用页。
 
+## 提供商
+
+- **`/login` 和设置向导只列账号登录**（OAuth、设备码等，约 20 项，如 ChatGPT、Claude、Gemini、GitHub Copilot、Cursor、OpenRouter）。原来 67 个“粘贴 API Key”的条目和 5 个实为填 Key 表单的条目（阿里 ×2、Cloudflare ×2、小米）不再列出，但没有删除，仍可通过环境变量或 models.yml 使用；退出登录列表仍包含全部。
+- **自定义提供商**：`/login` 第一项“＋ 添加自定义提供商”或命令 `/provider`，填写名称、Base URL、接口类型（OpenAI 兼容 / Anthropic 兼容）和 API Key（输入时遮掩）。配置写入 `~/.omp/agent/models.yml`（首次改写前备份为 `models.yml.bak`），Key 存入 OMP 凭据库（agent.db），自带模型列表的条目按 OMP 要求仍内联保存 Key。保存后自动拉取 `/models` 并显示发现的模型数或失败提示。`/provider` 可编辑、删除已有条目。
+- **`/model` 只列可用的提供商**，不再显示“Not signed in”的锁定列表。
+- 已在 Ghostty 中用本地模拟服务实测添加流程；截图在 `scripts/glide-spike/shots/providers/`。用户现有的 omlx、claude-proxy、codexplus 未改动。
+
 ## 下一步
 
 按 [开发计划](DEVELOPMENT_PLAN.md) 的顺序：~~品牌化~~（已完成，截图验收待补）→ ~~P3.3 审批策略~~（默认已改为 `write`，`~/.omp` 默认受限；三档中文名随菜单简化、审批框中文化随 G3，见 [P3.3](reviews/p3.3-approval-policy.md)）→ ~~菜单与设置简化~~（见下“菜单与设置”）→ **G3**（下一项） → G4 → P3.1／3.2 → G5 → 交互基线与 G6 → P4。
