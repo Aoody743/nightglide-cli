@@ -49,7 +49,7 @@
 - **完成记录**：`/more` 按“会话／模型／外观／工作／其他／扩展、技能与模板”分组，组名是不可选的灰色标题；每组先列常用命令（按菜单顺序），再列标准命令；说明跟随界面语言，扩展和技能的长说明只取第一句（最多 80 字）。默认 48 项（41 个内置命令加扩展、技能和模板）。“＋ 显示高级命令（52）”放在列表**第一行**（选择器不循环，放在末尾要按几十次↓才能到），从第一个命令按一次↑即到；选中后列出全部命令，高级命令在最后单独一组，光标直接停在第一个高级命令上。Terminal.app 实测：分组列表、输入 `git` 筛选、↑ 到开关、展开高级命令；截图在 `scripts/glide-spike/shots/s3/`（脚本 `more-shot.sh`）。
 - **仍是英文**：选择器底部的计数和搜索提示（`(1/55) Type to search`、`Search:`），属于上游选择器的通用文字，S4 或之后统一处理。
 
-### S4 图形化设置页
+### ~~S4 图形化设置页~~（2026-11-25 完成）
 
 `/settings` 打开 Glide 风格的全屏设置页，取代当前的“常用”标签：
 
@@ -59,12 +59,15 @@
 - **模型**：显示当前模型和生效的思考强度，下面是“登录”“自定义提供商”“切换模型”三个入口，分别打开 `/login`、`/provider`、`/model`；不在这里罗列提供商设置。
 - **高级设置**：打开 OMP 原有的标签页设置（去掉“常用”标签），标签名双语，内容不变。已失效的设置（如 `nightglide.layout`、上游更新检查）加隐藏标记，高级设置中也不显示。
 - 颜色全部取自当前主题，256 色和无色（NO_COLOR）终端下有降级样式，ASCII 符号集下控件改用 ASCII 字符。
+- **完成记录**：新页面在 fork 的 `packages/tui/src/overlays/nightglide-settings.ts`（`NightglideSettingsComponent`），分类栏宽屏在左、底部一行双语按键提示，窄于 100 列改单栏（先分类，Enter 进入，Esc 返回）。控件与路径：外观——`theme.dark`/`theme.light` 主题卡片（暗/亮两组，每张卡有主题名、五块色板、三行场景小预览；当前值 ◉、聚焦卡边框带光标）、`tui.motion` 与 `symbolPreset`、`composer.shape` 分段选择；模型——只读卡片（当前模型 + `thinkingLevelWord` 的实际生效思考强度）、`defaultThinkingLevel` 等级条（首档 `auto`，其后只列 `availableThinkingLevels`；当前值不在列表时显示“（当前模型不支持）”且不改写）、`nightglide.routingMode` 分段、`nightglide.localModel` 文本框（复用 `TextFormField`，清空即 unset）、`hideThinkingBlock` 开关、三个入口按钮（登录／自定义提供商／切换模型，先关页再走 `/login`、`/provider`、`/model` 的同一处理函数）；审批——`tools.approvalMode` 三张说明卡片（全部询问／高风险询问（默认）／自动执行；其他值如实显示“当前是其他模式（…）”且不改写）；通知——三个开关按 "on"/"off" 字符串写入；会话——`autoResume`、`compaction.enabled`、`retry.enabled`、`display.showTokenUsage`、`display.showTurnTime` 五个开关；语言——`nightglide.language` 分段（中文／English／跟随系统），切换后整页即时换语言。全部控件改即保存（`SettingsHost.set` + `onChange`），Esc 不撤销；主题提交走 `theme.dark`/`theme.light` 的 effect 链（与上游子菜单一致）：提交活动槽位立即重着色，提交另一背景的槽位只保存；`onThemePreview` 用于悬停卡片的实时预览，移开或提交后恢复已保存主题。“高级设置”内嵌上游 `SettingsSelectorComponent`（Esc 回到图形化页而不是关页）。上游“常用”页与 `settings-common.ts` 整体删除，`SETTING_TABS`／`TAB_LEADS`／`TAB_GROUPS`／`SettingTab` 和 `tab.common` 符号键清理干净；`settings-defs.ts` 新增显示用隐藏清单 `NIGHTGLIDE_HIDDEN_SETTINGS`（`startup.checkUpdate`、`update.channel`、`update.auto`、`startup.changelogMode`；读代码确认：`main.ts` 把 `showsStartupChangelog` 固定为 false，启动检查在 `isSourceCheckout()`（Nightglide 唯一发布形态）下先于读取这些设置返回，`canSelfUpdate()` 为 false，向导也不提供自动更新；若日后发布编译二进制需重新评估）。整页绘制主题家族的场景页面底色（与 Glide 外壳一致，实测终端白底上透明页面对比度不足）；ASCII 符号集下控件全部换 ASCII 字符，`NO_COLOR` 下无色彩转义、用 `*当前值*` 和光标字形标记状态。测试：新增 `packages/tui/test/nightglide-settings.test.ts`（27 项），并更新 6 个受影响的既有测试与测试桩（见“与计划的出入”）。Terminal.app 实测 68 张截图（`scripts/glide-spike/settings-shot.sh`，隔离 `PI_CODING_AGENT_DIR`，不读写 `~/.omp`；`shots/s4/`：zh/en × 120×36 宽屏 + 80×24 窄屏；每个分类、主题卡片、审批卡片、模型入口按钮、活动槽位切主题整页即时重着色、暗色槽位保存而观感不变、动效减弱后主界面静帧、语言行即时切换、进高级设置（无“常用”）再 Esc 返回、SGR 鼠标点击分类）。
+- **与计划的出入**：见完成记录内已标注的各点；另有两处实现决定：设置页整页绘制主题页面底色（计划只要求“颜色取自主题”），内嵌的上游高级设置页保持上游的透明外观；主题提交不调用 `onThemePreview`（计划写“沿用 onThemePreview 和现有的主题提交逻辑”）——浅色终端上提交暗色槽位若同时预览会把预览“卡”在暗色上，与自动主题语义冲突，故预览只用于悬停、提交走 effect 链。会话分类挑了上述五个布尔开关（`retry.enabled` 上游注册时无 `ui`，高级设置本就不显示，图形页首次给入口；`compaction.thresholdPercent` 是十档数值阈值，留给高级设置）。入口按钮做在一行内（←→ 选择、Enter 触发、点击直接触发）；分段选择超宽时折行成多个 `[ a │ b ]` 行；截图脚本改为按新窗口 id 识别自己的窗口并清理上次残留。
+- **仍是英文 / 未做**：内嵌上游高级设置页的全部条目与按键提示仍是英文（S1 已记录的范围）；Ghostty（1.4.0 已安装）真彩截图未完成——`ghostty -e` 启动的进程存活但窗口未出现；TSP（Tern Surface Protocol）终端未验证（图形页始终走 ANSI 行渲染，高级设置的 native prefs 由委托保留，未实测）。
 
 ### S5 验收与收尾
 
 - 单元测试：清单完整性、分层过滤、精确输入可运行高级命令、文本表双语完整、设置页各控件读写同一配置路径、窄屏布局。
 - 真实终端截图（Ghostty 与 Terminal.app，80×24 与 120×36，中英各一套）：`/`、`/more`（含显示高级命令）、设置主页各分类、高级设置；录屏一次主题／动效实时切换。
-- 更新 [项目现状](CURRENT_STATE.md)；第 3 项的旧实现（`settings-common.ts` 的常用标签）在新设置页通过验收后再移除。
+- 更新 [项目现状](CURRENT_STATE.md)；第 3 项的旧实现（`settings-common.ts` 的常用标签）已在 S4 随新设置页一并移除。
 
 ## 界面（G2–G6）
 
