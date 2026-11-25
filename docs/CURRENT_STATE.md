@@ -47,7 +47,7 @@
 
 ## 主题
 
-只内置 Nightglide 的五套主题（Aurora 有自己的场景和启动动画，见下）：nightglide-flight（默认暗色）、nightglide-cloudlight（默认亮色）、nightglide-abyss、nightglide-daybreak、nightglide-aurora。OMP 原有的 dark、light 和 100 套主题包已于 2026-11-20 删除；`dark`／`light` 等旧名称作为不列出的别名，分别加载 Flight／Cloudlight，旧配置与扩展不会因此报错。用户自定义主题（`~/.omp/agent/themes/*.json`）仍然可用。同轮修复：五套主题的代码块标题行对比度过低（约 1.5:1，提高到 3.5–4.3:1）；ASCII 符号模式下主题自带的 Unicode 转圈不再覆盖 ASCII。
+只内置 Nightglide 的六套主题（Aurora 有自己的场景和启动动画，见下）：nightglide-flight（默认暗色）、nightglide-cloudlight（默认亮色）、nightglide-abyss、nightglide-daybreak、nightglide-aurora、nightglide-iris（彩虹云端·浅色，2026-11-25 从上游删掉的主题包找回 light-cirrus 的云层配色，按负责人要求改名 Iris——希腊神话的彩虹女神——并接入 Glide 彩虹卷云场景，`/theme iris` 可用，见 shots/s4-iris）。OMP 原有的 dark、light 和 100 套主题包已于 2026-11-20 删除；`dark`／`light` 等旧名称作为不列出的别名，分别加载 Flight／Cloudlight，旧配置与扩展不会因此报错。用户自定义主题（`~/.omp/agent/themes/*.json`）仍然可用。同轮修复：五套主题的代码块标题行对比度过低（约 1.5:1，提高到 3.5–4.3:1）；ASCII 符号模式下主题自带的 Unicode 转圈不再覆盖 ASCII。
 
 **飞行与潜水场景**（2026-11-24 重做）：飞行——顶部是夜空（Cloudlight 为白天），有月亮（太阳）和柔和光晕、高空薄云与星星；底部是三层漂移的云海，云团圆顶、受光边缘和暗部，近层漂得最快，思考强度越高云团越高、边缘越亮。潜水——顶部是从水下看到的水面：闪动的水面线、游移的焦散光斑和斜射光束；底部是礁石、沙地、摇曳的海草、珊瑚和上升的气泡。真彩下平滑渐变，256 色终端用克制的网格配色。
 
