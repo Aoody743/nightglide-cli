@@ -1,34 +1,88 @@
-# Nightglide 获取、构建、安装与验证 (INSTALL)
+# Nightglide CLI 安装、构建、终端配置与验证指南 (INSTALL)
 
 > **"Build beyond the horizon." / "漫翔苍穹，构筑所想。"**
 
-Nightglide CLI 直接以源码方式运行 vendored OMP fork（`vendor/omp` 子模块），并叠加 Nightglide 品牌、路由与主题定制。
+本文覆盖 **Nightglide CLI v1.0.0** 的全部安装方式（Homebrew、APT / `.deb`、预编译二进制、源码构建与 `scripts/install.sh`）、推荐终端与 IDE 字体配置，以及安装后冒烟验证。
+
+Nightglide 沿用 `~/.omp` 数据目录（配置、模型凭据与历史会话完全兼容），并且**绝不创建、覆盖或修改任何全局 `omp` 命令**。
 
 ---
 
-## 1. 前置条件
+## 1. 一键包管理器与预编译安装 (v1.0.0)
+
+### 1.1 macOS / Linux via Homebrew
+
+```bash
+brew tap Aoody743/nightglide
+brew install nightglide
+```
+
+或者直接用单行命令安装：
+
+```bash
+brew install Aoody743/nightglide/nightglide
+```
+
+验证：
+
+```bash
+nightglide --version   # 预期输出: nightglide/1.0.0
+```
+
+### 1.2 Debian / Ubuntu via APT
+
+**方式 A：通过 GitHub Pages APT 仓库安装（便于 `apt upgrade` 更新）**
+
+```bash
+echo "deb [trusted=yes] https://aoody743.github.io/nightglide-cli/apt stable main" | sudo tee /etc/apt/sources.list.d/nightglide.list
+sudo apt update && sudo apt install nightglide
+```
+
+**方式 B：直接安装 GitHub Releases 提供的 `.deb` 包**
+
+```bash
+# x86_64 (amd64)
+sudo apt install ./nightglide_1.0.0_amd64.deb
+
+# ARM64 (arm64)
+sudo apt install ./nightglide_1.0.0_arm64.deb
+```
+
+### 1.3 独立预编译包 (GitHub Releases)
+
+从 GitHub Releases 下载对应平台（`darwin-arm64`、`darwin-x64`、`linux-x64`、`linux-arm64` 等）的 `v1.0.0` 归档包与校验文件：
+
+```bash
+tar -xzf nightglide-v1.0.0-<platform>.tar.gz
+install -m 0755 nightglide ~/.local/bin/nightglide
+nightglide --version   # 预期输出: nightglide/1.0.0
+```
+
+---
+
+## 2. 源码模式构建与安装 (`./nightglide` / `scripts/install.sh`)
+
+Nightglide 主仓库通过 Git 子模块 `vendor/omp` 跟踪 vendored OMP fork（分支 `codex/nightglide`），并以源码方式直接运行或通过 `scripts/install.sh` 生成本地启动器。
+
+### 2.1 前置条件
 
 | 依赖 | 要求 | 说明 |
 | :--- | :--- | :--- |
-| [Bun](https://bun.sh) | **>= 1.4.4**（强制） | 运行时与包管理；上游 `packageManager: bun@>=1.4.4` |
+| [Bun](https://bun.sh) | **>= 1.4.4**（强制） | 运行时与包管理；`vendor/omp` `packageManager` 要求 `bun@>=1.4.4` |
 | Git | 2.40+ | 含 submodule 支持 |
 | Rust 工具链（cargo） | 上游默认后端所需 | 仅在构建/重建原生插件 `pi_natives` 时需要；改 Rust crates 或换平台后需重跑 |
 
-> 本仓库当前验证环境：macOS arm64 + Bun，原生产物 `packages/natives/native/pi_natives.darwin-arm64.node` 已构建。
-
-## 2. 获取源码
+### 2.2 获取源码
 
 ```bash
-git clone <主仓库地址> "Nightglide CLI"
+git clone https://github.com/Aoody743/nightglide-cli.git "Nightglide CLI"
 cd "Nightglide CLI"
 
 # 拉起 vendored OMP 子模块（指向 nightglide-omp fork，见 .gitmodules）
 git submodule update --init vendor/omp
 ```
 
-`vendor/omp` 是上游 [oh-my-pi](https://github.com/can1357/oh-my-pi) 的 Nightglide fork，包含 Nightglide 品牌化（`nightglide` bin、nightglide-* 主题、nightglide-routing 等）。
-
-## 3. 安装依赖与构建原生插件
+### 2.3 安装依赖与构建原生插件
 
 ```bash
 cd vendor/omp
@@ -36,11 +90,11 @@ bun install          # 安装 Bun 工作区依赖
 bun run build:native # 构建 pi_natives 原生插件（默认 Cargo/N-API 后端）
 ```
 
-- 原生产物落在 `packages/natives/native/pi_natives.<platform>.node`（如 `pi_natives.darwin-arm64.node`）。
+- 原生产物落在 `packages/natives/native/pi_natives.<platform>.node`（如 `pi_natives.darwin-arm64.node`、`pi_natives.linux-x64.node`）。
 - 修改了 Rust crates 或更换了平台后需重跑 `bun run build:native`。
-- 一步到位替代：上游提供 `bun setup`（= install → natives 构建 → 全局链接 `omp`），但其"链接全局 omp"一步面向上游开发流，Nightglide 不依赖它；Nightglide 使用下一节的 `scripts/install.sh`。
+- 上游自带的 `bun setup` 会全局链接 `omp` 命令；Nightglide 不使用它，而是使用下一节的 `scripts/install.sh`。
 
-## 4. 安装（scripts/install.sh）
+### 2.4 安装源码启动器 (`scripts/install.sh`)
 
 ```bash
 # 在主仓库根目录执行；默认安装到 ~/.local/bin/nightglide
@@ -52,77 +106,88 @@ bash scripts/install.sh --prefix /usr/local
 
 行为说明：
 
-- 安装内容 = 一个 sh launcher（`<prefix>/bin/nightglide`），语义与仓库根目录 `./nightglide` wrapper 等价：设置 `PI_RAW_BIN=nightglide`、`OMP_APP_NAME=nightglide`，然后把真实 cwd 存入 `OMP_LAUNCH_CWD`、cd 到 bunfig-free 目录（`~/.omp/.dev-cwd`）后 `bun --preload <repo>/vendor/omp/packages/coding-agent/scripts/omp.ts <repo>/vendor/omp/packages/coding-agent/src/cli.ts "$@"`（仓库绝对路径在安装时固化）。
+- 安装内容为一份 sh launcher（`<prefix>/bin/nightglide`），语义与仓库根目录 `./nightglide` 等价：设置 `PI_RAW_BIN=nightglide`、`OMP_APP_NAME=nightglide`，将真实目录存入 `OMP_LAUNCH_CWD`，切换到无 `bunfig.toml` 的目录（`~/.omp/.dev-cwd`）后再运行 `bun --preload <repo>/vendor/omp/packages/coding-agent/scripts/omp.ts <repo>/vendor/omp/packages/coding-agent/src/cli.ts "$@"`。
 - **绝不创建或修改任何 `omp` 命令**——已存在的全局 `omp` 不受影响。
-- 幂等：重复执行会重新生成同一 launcher；若目标位置已存在**非本脚本生成**的文件则拒绝覆盖（失败即停，`set -euo pipefail`）。
-- 前置校验：bun 在 PATH、`vendor/omp` 子模块已初始化、`vendor/omp/node_modules` 已安装、`pi_natives` 原生插件已按当前平台构建——任一不满足即报错并给出补救命令。
+- **回环代理豁免**：根启动器 `./nightglide` 会将 `127.0.0.1,localhost,::1` 追加到 `NO_PROXY`/`no_proxy`（保留用户已有配置），避免系统代理劫持 oMLX、Ollama、LM Studio 等本地模型端点。
+- **幂等且安全**：重复执行会更新脚本自身生成的 launcher；若目标路径存在非本脚本生成的文件则拒绝覆盖。
+- **前置校验**：要求 `bun` 在 `PATH` 中、`vendor/omp` 已初始化、`vendor/omp/node_modules` 存在、且当前平台的 `pi_natives.<platform>.node` 已构建。
 
-验证安装：
-
-```bash
-nightglide --version   # 预期输出: nightglide/1.0.0-beta.1
-```
-
-## 4.5 字体（NeoX Mono，可选）
-
-Nightglide 的推荐字体是 **NeoX Mono**。终端程序无法自己指定字体，字体由终端的描述文件决定。字体版权保留所有权利，仓库不附带字体文件，需自行安装。
+验证：
 
 ```bash
-# 在 Terminal.app 新建/更新名为 “Nightglide” 的描述文件（NeoX Mono 14pt，140×40），不改默认
-scripts/terminal-profile.sh
-# 同时设为 Terminal.app 的默认与启动描述文件
-scripts/terminal-profile.sh --default
+nightglide --version   # 预期输出: nightglide/1.0.0
 ```
 
-iTerm2：Settings › Profiles › Text › Font 选 “NeoX Mono 1.4”。Ghostty：在配置中写 `font-family = "NeoX Mono 1.4"`。NeoX Mono 只有 Regular 一个字重，粗体由终端合成。
+---
 
-### 推荐终端：画面最精细
+## 3. 推荐终端、IDE 与字体配置 (Terminals, IDEs & Fonts)
 
-顶部和底部的场景用半格方块（`▀`）把每格分成上下两个像素。
+Nightglide 顶部与底部场景带、像素伙伴和边框使用 **24-bit Truecolor** 与半格方块字符（`▀`）。终端程序无法由 CLI 自选字体，字形与抗锯齿由宿主的终端或 IDE 描述文件决定。
 
-- **iTerm2、Ghostty**（推荐）：终端自己绘制方块字符，并支持真彩，场景最精细、渐变平滑。安装 Ghostty：`brew install --cask ghostty`；字体在 `~/.config/ghostty/config` 中设置，例如：
+### 3.1 顶级真彩半块终端 (`cellPixels=2`)
 
+以下终端均原生自绘方块字符（`▀` 上下两像素无接缝）并支持 24-bit Truecolor，推荐优先使用：
+
+- **Ghostty（首选）**：
+  ```bash
+  brew install --cask ghostty
   ```
+  在 `~/.config/ghostty/config` 中配置（示例使用推荐字体 `NeoX Mono 1.4` 或开源替代 `JetBrains Mono`）：
+  ```ini
   font-family = "NeoX Mono 1.4"
+  # 开源替代: font-family = "JetBrains Mono"
   font-size = 14
   window-width = 140
   window-height = 40
   ```
-- **Terminal.app**：用字体里的方块字符绘制，NeoX Mono 等字体的方块填不满半格，像素之间会有缝，而且只有 256 色。所以在 Terminal.app 中场景自动改为每格一个像素（只用背景色），画面清晰但颗粒较粗。
+- **iTerm2**：Settings › Profiles › Text › Font 选择 `NeoX Mono 1.4` / `JetBrains Mono` / `Fira Code`；建议保留足够宽度（`>=100` 列可展开 `Ctrl+N` 侧边栏）。
+- **WezTerm / Kitty / Alacritty**：均支持 Truecolor 与 `▀` 半块绘制，开箱即进入高精度模式。
 
-需要时可用环境变量覆盖：`NIGHTGLIDE_SCENE_PIXELS=2` 强制半格（更精细），`NIGHTGLIDE_SCENE_PIXELS=1` 强制整格。
+### 3.2 AI 与代码 IDE 内置终端提示
 
-## 5. 冒烟验证
+在 **VS Code**、**Cursor**、**Antigravity**、**Zed** 的内置终端（或并排终端分屏）中运行 Nightglide 时，建议确认：
+
+1. **开启 GPU 硬件加速与 24-bit 色彩**：确认环境中 `COLORTERM=truecolor`（VS Code / Cursor / Zed 默认提供）。
+2. **关闭强制最小对比度改色**（如 VS Code / Cursor 的 `terminal.integrated.minimumContrastRatio: 1`），防止终端自动覆盖暗色/亮色主题的柔和边框与渐变色阶。
+3. **字体与图标字符集**：建议使用 **NeoX Mono**、**JetBrains Mono**（Apache 2.0）或 **Fira Code**（SIL OFL 1.1）；若使用 Nerd Font 补丁字体，可在 `/settings` →「外观」把图标字符切换为 `nerd`。
+
+### 3.3 macOS Terminal.app 专用说明与字体脚本
+
+macOS 系统自带 Terminal.app 仅支持 256 色，且直接按字体绘制 `▀` 时容易在像素行之间产生细缝。因此 Nightglide 在检测到 `TERM_PROGRAM=Apple_Terminal` 时，会自动降级为 **整格背景像素模式（`cellPixels=1`）** 并使用专门调校的 `scene256` 网格色板。
+
+- 如已安装 **NeoX Mono**（该字体版权保留所有权利，仓库不附带字体文件，需自行安装），可运行脚本创建/更新 `"Nightglide"` 描述文件（14pt，140×40）：
+  ```bash
+  # 新建或更新 Terminal.app 的 "Nightglide" 描述文件
+  scripts/terminal-profile.sh
+
+  # 同时设为 Terminal.app 默认与启动描述文件
+  scripts/terminal-profile.sh --default
+  ```
+- 如需强制控制像素精度，可覆盖环境变量：
+  - `NIGHTGLIDE_SCENE_PIXELS=2`：强制半格双像素（适合自绘 `▀` 的真彩终端）
+  - `NIGHTGLIDE_SCENE_PIXELS=1`：强制整格单像素
+- **划词复制提示**：Glide 全屏模式捕获滚轮事件；在 Terminal.app 等终端中使用系统鼠标划词时，请按住 **Option (`⌥`) 拖动**，或直接输入 `/copy`。
+
+---
+
+## 4. 冒烟验证与本地数据说明
+
+### 4.1 安装后冒烟检查
 
 ```bash
 # 1. 版本与帮助
-nightglide --version
+nightglide --version   # 输出: nightglide/1.0.0
 nightglide --help
 
-# 2. 上游自带冒烟套件（可选，在 vendor/omp 内）
+# 2. 仓库根启动器门禁（源码模式下）
+bun test ./scripts
+
+# 3. 上游自带冒烟套件（源码模式下，在 vendor/omp 内）
 cd vendor/omp && bun run ci:test:smoke
-# = cli.ts --version / --help / stats --help / --smoke-test
 ```
 
-launcher 语义（2026-11-18 已修复）：根 wrapper 与本 launcher 均采用上游 `packages/coding-agent/scripts/omp` 的机制——`OMP_LAUNCH_CWD` 记录用户真实目录、cd 到 bunfig-free 目录启动、`omp.ts` preload shim 在 import 前恢复 cwd。此前 `bun --cwd` 方式会把进程 cwd 固定在 vendored 源码目录，导致 `getProjectDir()`（`packages/utils/src/dirs.ts:234` 起）把项目解析到 vendor/omp 而非用户所在目录（已实测复现并修复：会话目录名以启动目录命名）。
+### 4.2 数据与配置目录兼容
 
-## 6. 上游官方分发方式（记录）
-
-上游 OMP 的分发面（供对照，Nightglide 当前不使用）：
-
-1. **预编译二进制脚本安装**：`curl -fsSL https://omp.sh/install | sh`（从 `build.stencil.so` 拉取二进制并校验 SHA-256；`--source` 改为 bun 安装）；Windows 为 `irm https://omp.sh/install.ps1 | iex`。二进制由 `bun scripts/ci-release-build-binaries.ts`（`bun --compile`，目标 darwin-arm64/x64、linux-x64/arm64/musl 等）产出。
-2. **npm 包**：`bun install -g @oh-my-pi/pi-coding-agent`（bin: `omp` / `ng` / `nightglide`；`files` 携带 `src`、`dist/cli.js`、`dist/*.node`（编译好的原生插件）与 `dist/*.json-*.zst` 数据文件），发布走 `npm publish -ws --access public`。
-3. **Homebrew**：`brew install can1357/tap/omp`；**Nix flake**：`packages.<system>.omp` 等。
-4. **源码开发模式**：`bun setup`（见第 3 节），或直接 `bun --cwd=packages/coding-agent src/cli.ts`。
-
-## 7. 开放项：单文件二进制打包（未验证）
-
-**状态：未验证，本文不宣称可用。**
-
-上游具备 `bun --compile` 单文件二进制流水线（`packages/coding-agent/scripts/build-binary.ts` → `compile-binary.ts`，经 `COMPILED_EXTERNAL_DEPENDENCIES` 与 `natives/scripts/embed-native.ts` 把 `pi_natives` 的 `.node` 原生库与 `.json-*.zst` 数据文件嵌入二进制；Release 产物在 `packages/coding-agent/binaries/omp-*`）。未在 Nightglide fork 上验证的原因：
-
-- `.node` 原生插件的嵌入与运行期解包路径依赖上游 release 工具链的组合（bazel/cargo 产物命名、embed-native 目标表、`getPackageDir()` 在 compiled 模式下的回退逻辑，见 `extensibility/legacy-pi-coding-agent-shim.ts` 中 issue #1423 的处理），需要针对 fork 完整跑一遍 `bun run build` + 各平台目标才能确认。
-- fork 的 `nightglide` bin 命名与品牌化 env 尚未在 compiled 模式下验证（上游二进制以 `omp` 身份自检）。
-- 若后续启用，需补充：fork 的 release 构建脚本入口、SHA-256 校验、以及 `nightglide --smoke-test` 在 compiled 模式下的验收。
-
-在此之前，Nightglide 的官方安装形态是本文第 4 节的**源码模式 launcher**。
+- 所有配置（`config.yml`）、模型定义（`models.yml`）、凭据库（`agent.db`）、自定义主题（`themes/*.json`）与会话记录仍沿用 `~/.omp`（可通过 `PI_CONFIG_DIR` / `PI_CODING_AGENT_DIR` 或 `--profile` 覆盖）。
+- `nightglide` 与既有 `omp` 命令互不覆盖，可安全并存。
+- 有关单文件二进制构建与跨平台发布校验的完整清单，请参阅 [P4_RELEASE_CHECKLIST.md](P4_RELEASE_CHECKLIST.md) 与 [UPSTREAM_SYNC.md](UPSTREAM_SYNC.md)。

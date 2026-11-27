@@ -12,7 +12,10 @@
 #
 # Re-running is idempotent: the launcher is regenerated in place. The script
 # refuses to overwrite a file it did not generate. All checks fail fast.
-set -euo pipefail
+set -eu
+if (set -o pipefail) 2>/dev/null; then
+	set -o pipefail
+fi
 
 usage() {
 	cat <<'USAGE'
@@ -23,6 +26,7 @@ repository's vendored source: vendor/omp/packages/coding-agent/src/cli.ts.
 
 Options:
   --prefix DIR   Install into DIR/bin/nightglide (default: ~/.local/bin)
+  -v, --version  Show installer version
   -h, --help     Show this help
 
 The installer never creates or modifies any `omp` command; an existing
@@ -34,6 +38,20 @@ die() {
 	echo "install.sh: error: $1" >&2
 	exit 1
 }
+
+resolve_repo_root() {
+	script_path="$0"
+	while [ -L "$script_path" ]; do
+		link="$(readlink "$script_path")"
+		case "$link" in
+		/*) script_path="$link" ;;
+		*) script_path="$(dirname "$script_path")/$link" ;;
+		esac
+	done
+	(cd "$(dirname "$script_path")/.." && pwd)
+}
+
+REPO_ROOT="$(resolve_repo_root)"
 
 PREFIX=""
 while [ $# -gt 0 ]; do
@@ -47,6 +65,11 @@ while [ $# -gt 0 ]; do
 		PREFIX="${1#--prefix=}"
 		shift
 		;;
+	-v | --version)
+		PKG_VER="$(sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$REPO_ROOT/package.json" | head -n 1)"
+		echo "nightglide-install/${PKG_VER:-1.0.0}"
+		exit 0
+		;;
 	-h | --help)
 		usage
 		exit 0
@@ -57,17 +80,6 @@ while [ $# -gt 0 ]; do
 		;;
 	esac
 done
-
-# Resolve the repository root (two levels above this script).
-SCRIPT_PATH="$0"
-while [ -L "$SCRIPT_PATH" ]; do
-	LINK="$(readlink "$SCRIPT_PATH")"
-	case "$LINK" in
-	/*) SCRIPT_PATH="$LINK" ;;
-	*) SCRIPT_PATH="$(dirname "$SCRIPT_PATH")/$LINK" ;;
-	esac
-done
-REPO_ROOT="$(cd "$(dirname "$SCRIPT_PATH")/.." && pwd)"
 
 # Default prefix: ~/.local. Relative --prefix values are made absolute.
 [ -n "$PREFIX" ] || PREFIX="$HOME/.local"

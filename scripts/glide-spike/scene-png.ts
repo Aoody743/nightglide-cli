@@ -22,7 +22,9 @@ const GAP = 12;
 const THEMES = process.env.NG_THEMES?.split(",") ?? [
   "nightglide-flight",
   "nightglide-cloudlight",
+  "nightglide-iris",
   "nightglide-abyss",
+  "nightglide-abyss-trench",
   "nightglide-daybreak",
   "nightglide-aurora",
 ];

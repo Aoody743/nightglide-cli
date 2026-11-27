@@ -9,7 +9,7 @@ lang=$1; out=$2
 here=${0:A:h}
 root=/tmp/ngmore-$lang
 rm -rf $root; mkdir -p $root/work $root/agent $out
-printf 'setupVersion: 3\ntheme:\n  dark: nightglide-flight\n  light: nightglide-cloudlight\nnightglide:\n  language: %s\n' $lang > $root/agent/config.yml
+printf 'setupVersion: 4\ntheme:\n  dark: nightglide-flight\n  light: nightglide-cloudlight\nnightglide:\n  language: %s\n' $lang > $root/agent/config.yml
 fifo=$root/in.fifo
 mkfifo $fifo
 cat > $root/run.command <<EOF

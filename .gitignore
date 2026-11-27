@@ -29,5 +29,6 @@ yarn-error.log*
 tmp/
 
 # Tool runtime caches
+.claude/
 .v2c/
 .video_agent/

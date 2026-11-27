@@ -1,0 +1,358 @@
+name: CI & Release
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - "v*"
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version override (defaults to tag or root package.json)"
+        required: false
+        type: string
+      publish:
+        description: "Publish GitHub Release, Homebrew tap, and APT gh-pages"
+        required: false
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: "${{ github.workflow }}-${{ startsWith(github.ref, 'refs/tags/v') && format('release-{0}', github.sha) || github.ref }}"
+  cancel-in-progress: "${{ !startsWith(github.ref, 'refs/tags/v') && github.event_name != 'workflow_dispatch' }}"
+
+jobs:
+  verify:
+    name: Verify & Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository with submodules
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.4.5"
+
+      - name: Install native build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            pkg-config libssl-dev clang libclang-dev cmake make ninja-build
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: nightly-2026-11-08
+
+      - name: Cache Cargo artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: vendor/omp
+
+      - name: Cache Bun packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock', 'vendor/omp/bun.lock') }}
+          restore-keys: |
+            bun-${{ runner.os }}-
+
+      - name: Install dependencies
+        run: |
+          bun install --frozen-lockfile
+          bun install --cwd vendor/omp --frozen-lockfile
+
+      - name: Build native addon (pi_natives)
+        env:
+          OMP_NATIVE_CARGO_PROFILE: ci
+        run: bun --cwd vendor/omp run build:native
+
+      - name: Lint and format check modified license files
+        run: |
+          vendor/omp/node_modules/.bin/oxlint \
+            vendor/omp/packages/coding-agent/src/cli/license.ts \
+            vendor/omp/packages/coding-agent/test/cli-license.test.ts
+          vendor/omp/node_modules/.bin/oxfmt --check \
+            vendor/omp/packages/coding-agent/src/cli/license.ts \
+            vendor/omp/packages/coding-agent/test/cli-license.test.ts
+
+      - name: Run launcher & packaging test suites
+        run: bun test ./scripts
+
+      - name: Run Nightglide & license test suites
+        working-directory: vendor/omp
+        run: |
+          bun test \
+            packages/coding-agent/test/cli-license.test.ts \
+            packages/coding-agent/test/nightglide-*.test.ts \
+            packages/tui/test/nightglide-*.test.ts
+
+      - name: Check CLI & installer entrypoints
+        run: |
+          ./nightglide --version
+          ./nightglide --help
+          ./nightglide --license | head -n 5
+          sh scripts/install.sh --version
+          sh scripts/install.sh --help
+          bun run scripts/package-release.ts --dry-run --deb --targets darwin-arm64,darwin-x64,linux-x64,linux-arm64
+
+  build-release:
+    name: "Build Release (${{ matrix.target }})"
+    needs: [verify]
+    if: github.event_name != 'pull_request'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: darwin-arm64
+            os: macos-15
+            os_family: macos
+            deb_flag: ""
+            deb_arch: ""
+          - target: darwin-x64
+            os: macos-15-intel
+            os_family: macos
+            deb_flag: ""
+            deb_arch: ""
+          - target: linux-x64
+            os: ubuntu-latest
+            os_family: linux
+            deb_flag: "--deb"
+            deb_arch: amd64
+          - target: linux-arm64
+            os: ubuntu-24.04-arm
+            os_family: linux
+            deb_flag: "--deb"
+            deb_arch: arm64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout repository with submodules
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Resolve release version
+        id: version
+        shell: bash
+        run: |
+          if [ -n "${{ inputs.version }}" ]; then
+            ver="${{ inputs.version }}"
+          elif [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            ver="${GITHUB_REF_NAME}"
+          else
+            ver="$(sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' package.json | head -n 1)"
+          fi
+          ver="${ver#v}"
+          echo "version=$ver" >> "$GITHUB_OUTPUT"
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.4.5"
+
+      - name: Install Linux native build dependencies
+        if: matrix.os_family == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            pkg-config libssl-dev clang libclang-dev cmake make ninja-build
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: nightly-2026-11-08
+
+      - name: Cache Cargo artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: vendor/omp
+
+      - name: Cache Bun packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock', 'vendor/omp/bun.lock') }}
+          restore-keys: |
+            bun-${{ runner.os }}-
+
+      - name: Install dependencies
+        run: |
+          bun install --frozen-lockfile
+          bun install --cwd vendor/omp --frozen-lockfile
+
+      - name: Build native addon (pi_natives)
+        env:
+          OMP_NATIVE_CARGO_PROFILE: ci
+        run: bun --cwd vendor/omp run build:native
+
+      - name: Compile & package Nightglide (${{ matrix.target }})
+        run: |
+          bun run scripts/package-release.ts \
+            --version "${{ steps.version.outputs.version }}" \
+            --targets "${{ matrix.target }}" \
+            ${{ matrix.deb_flag }}
+
+      - name: Smoke test compiled binary
+        shell: bash
+        env:
+          BINARY: dist/release/nightglide-v${{ steps.version.outputs.version }}-${{ matrix.target }}
+        run: |
+          set -euo pipefail
+          chmod +x "$BINARY"
+          tmp_home="$(mktemp -d)"
+          trap 'rm -rf "$tmp_home"' EXIT
+          export HOME="$tmp_home/home"
+          export XDG_DATA_HOME="$tmp_home/xdg"
+          export NO_PROXY="127.0.0.1,localhost,::1"
+          export no_proxy="127.0.0.1,localhost,::1"
+          mkdir -p "$HOME" "$XDG_DATA_HOME"
+          "$BINARY" --version
+          "$BINARY" --help
+          "$BINARY" --license | head -n 5
+          "$BINARY" --smoke-test
+
+      - name: Verify Debian package installation
+        if: matrix.os_family == 'linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y ./dist/release/*.deb
+          tmp_home="$(mktemp -d)"
+          trap 'rm -rf "$tmp_home"' EXIT
+          export HOME="$tmp_home/home"
+          export XDG_DATA_HOME="$tmp_home/xdg"
+          export NO_PROXY="127.0.0.1,localhost,::1"
+          export no_proxy="127.0.0.1,localhost,::1"
+          mkdir -p "$HOME" "$XDG_DATA_HOME"
+          nightglide --version
+          nightglide --smoke-test
+
+      - name: Upload target release artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-assets-${{ matrix.target }}
+          path: |
+            dist/release/*
+            !dist/release/SHA256SUMS.txt
+          if-no-files-found: error
+          retention-days: 2
+
+  publish:
+    name: Publish Release, Homebrew & APT
+    needs: [verify, build-release]
+    if: >-
+      needs.verify.result == 'success' &&
+      needs.build-release.result == 'success' &&
+      (startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.publish))
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      HAS_HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN != '' }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.4.5"
+
+      - name: Resolve release version & tag
+        id: meta
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          if [ -n "${{ inputs.version }}" ]; then
+            ver="${{ inputs.version }}"
+          elif [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            ver="${GITHUB_REF_NAME}"
+          else
+            ver="$(sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' package.json | head -n 1)"
+          fi
+          ver="${ver#v}"
+          tag="v$ver"
+          echo "version=$ver" >> "$GITHUB_OUTPUT"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          existing_assets="$(gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets | length' 2>/dev/null || echo 0)"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] || [ "$existing_assets" -eq 0 ] || [ "${HAS_HOMEBREW_TAP_TOKEN}" = "true" ]; then
+            echo "should_upload=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Skipping asset overwrite for existing release $tag without HOMEBREW_TAP_TOKEN to avoid Homebrew SHA256 drift."
+            echo "should_upload=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Download all target release artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: release-assets-*
+          path: dist/release
+          merge-multiple: true
+
+      - name: Assemble SHA256SUMS, Homebrew formula, and APT repository
+        run: |
+          bun run scripts/package-release.ts \
+            --version "${{ steps.meta.outputs.version }}" \
+            --targets darwin-arm64,darwin-x64,linux-x64,linux-arm64 \
+            --assemble-only \
+            --deb \
+            --strict-formula
+          (cd dist/release && sha256sum -c SHA256SUMS.txt)
+
+      - name: Create GitHub Release
+        if: steps.meta.outputs.should_upload == 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.meta.outputs.tag }}
+          name: Nightglide CLI ${{ steps.meta.outputs.tag }}
+          generate_release_notes: true
+          files: |
+            dist/release/*
+            LICENSE
+            THIRD-PARTY-NOTICES.txt
+
+      - name: Checkout Homebrew tap (Aoody743/homebrew-nightglide)
+        if: env.HAS_HOMEBREW_TAP_TOKEN == 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: Aoody743/homebrew-nightglide
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          path: homebrew-tap
+
+      - name: Update Homebrew formula
+        if: env.HAS_HOMEBREW_TAP_TOKEN == 'true'
+        run: |
+          mkdir -p homebrew-tap/Formula
+          cp packaging/homebrew/nightglide.rb homebrew-tap/Formula/nightglide.rb
+          cd homebrew-tap
+          if git diff --quiet -- Formula/nightglide.rb && [ -z "$(git status --porcelain -- Formula/nightglide.rb)" ]; then
+            echo "Homebrew formula already up to date for ${{ steps.meta.outputs.tag }}"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Formula/nightglide.rb
+          git commit -m "nightglide ${{ steps.meta.outputs.version }}"
+          git push origin HEAD:main
+
+      - name: Deploy APT repository to gh-pages
+        if: steps.meta.outputs.should_upload == 'true'
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./dist/apt
+          destination_dir: apt
+          keep_files: true
+          commit_message: "apt: publish nightglide ${{ steps.meta.outputs.tag }}"

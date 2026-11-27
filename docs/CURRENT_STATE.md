@@ -1,6 +1,6 @@
 # Nightglide 项目现状
 
-更新时间：2026-11-25。本文是工作区快照，不是完整功能或安全审计；代码变化后须同步更新。
+更新时间：2026-11-27。本文是工作区快照，不是完整功能或安全审计；代码变化后须同步更新。
 
 ## 结构
 
@@ -8,13 +8,15 @@
 
 ## 界面
 
-**Glide 全屏界面（唯一的交互界面）**：在 alt-screen 中自管整窗布局——顶栏、上下像素场景带、对话面板（应用内滚动）、信息栏（模型／强度／子智能体／状态，读真实数据；侧栏显示时底部状态栏不再重复模型）、输入卡片、状态行。已在 Terminal.app 实测流式回复、面板内滚轮回看、140×40→80×24 缩放降级、`/exit` 与 SIGTERM 干净恢复（退出时对话写回原生 scrollback）。选择它的原因见 [视觉差距审计](reviews/visual-gap-audit.md)，细节与已知问题见 [Glide 验证记录](reviews/glide-spike.md)。
+**Glide 全屏界面（唯一的交互界面）**：在 alt-screen 中自管整窗布局——顶底双侧像素场景带、对话面板（应用内滚动，G3 统一用户卡与 `✦ Nightglide` 回复头、工具/Diff 卡片配色及中英双语审批框）、**默认收起的可折叠侧边栏**（`Ctrl+N` 或顶部 `[ ▸ 详情 ^N ]` / `[ ▾ 收起 ]` 切换；展开后顶部呈现 10×5 像素伙伴与 `Nightglide` 实时状态、无多余横线的紧凑参数行：模型与路由、思考强度条、上下文用量（无模型时显示 `—`，不显示 `7.2K/?`）、尾部优先保留的 `工作目录`、可展开子智能体列表与底部 `/summary` 胶囊按钮；扩展与窄屏自适应回退）、输入卡片、默认状态栏（已移除默认 `path` 与 `context_pct` 杂讯，改用几何符号替换 Windows/废纸篓图标）。已在 Ghostty（`1.4.0`，真彩）与 Terminal.app（NeoX Mono 14pt，256 色）140×40 下完成静帧实测，截图在 `scripts/glide-spike/shots/verify-ghostty/` 与 `scripts/glide-spike/shots/verify/`。选择原因见 [视觉差距审计](reviews/visual-gap-audit.md)，细节与历史记录见 [Glide 验证记录](reviews/glide-spike.md)。
 
 **经典 inline 模式**：已于 2026-11-22 移除入口（F2、`--classic`、`nightglide.layout`、`NIGHTGLIDE_LAYOUT`）。旧配置里的 `nightglide.layout` 仍可加载，但不再生效。print／RPC 等非交互模式不受影响。
 
 **品牌**：窗口标题与状态栏的标识为 `✦`（ASCII 符号集为 `ng`）；帮助、提示、报错和示例中的命令名为 `nightglide`。`~/.omp` 数据目录、`@oh-my-pi/*` 包名、`OMP_*` 环境变量、日志文件名 `omp.*.log` 保留不变。启动时不再弹出上游 OMP 更新日志；`nightglide update` 只提示用 git 更新。
 
-**版本**：产品版本从 v1.0 起算，当前为 **v1.0 beta1**（`1.0.0-beta.1`，见根 `package.json` 与 fork 的 `PRODUCT_VERSION`），用于 `--version`、帮助标题和欢迎横幅。fork 内部的 `VERSION` 仍是上游 18.20.2，浏览器扩展、插件兼容和更新日志比较依赖它，不改。
+**版本**：产品版本为 **v1.0.0**（`nightglide/1.0.0`，见根 [package.json](../package.json) 与 fork 的 `PRODUCT_VERSION`），用于 `--version`、`--help` 标题与欢迎信息。fork 内部的 `VERSION` 仍是上游 18.20.2，浏览器扩展、插件兼容与导出器版本比较依赖它，不改。
+
+**Web 面板与导出页**：`nightglide stats` 本地统计网页面板已重做为 **Nightglide Stats** 品牌界面（几何翼型 `N` 徽标、Flight Dark / Cloudlight 双主题、核心中英 `中 / EN` 切换），并在 Chromium 实机浏览器完成暗/亮/中英交互及零控制台报错验证；`/export` 离线 HTML 会话导出同步切换为 Flight Dark / Cloudlight 主题配色。
 
 **字体**：推荐 NeoX Mono；终端程序不能自选字体，由 `scripts/terminal-profile.sh` 建立 Terminal.app 的 “Nightglide” 描述文件（NeoX Mono 14pt），截图脚本会自动使用它。见 [安装说明](INSTALL.md)。
 
@@ -23,7 +25,9 @@
 - **语言**（S1，2026-11-24）：设置 `nightglide.language` 可选中文（默认）、English、跟随系统（按 `LANG`／`LC_ALL`），在 `/settings` 图形页“语言”分类，改后不用重启。Nightglide 自己的界面文字（菜单、图形设置页、标签名、提供商流程、侧栏、提示）都有中英两版；OMP 原有的高级设置条目、命令实时状态、启动警告和设置向导仍是英文。
 - **`/` 菜单**（S2，2026-11-25）：93 个内置命令分三层。只输入 `/` 时列出常用命令（默认 20 个，含 `/more`，清单是 `nightglide.commonCommands`）；输入名字时搜索常用和标准命令；高级命令（重复和实验性的，如 `/switch`、`/quit`、`/vibe`，清单是 `nightglide.hiddenCommands`）要输入完整名字或别名才出现，照样能运行。每个内置命令都显示“分组 · 说明”，有实时状态时附在括号里，语言跟随界面语言。扩展、技能、模板命令照常可搜索。
 - **`/more`**（S3，2026-11-25）：按分组列出常用和标准命令，以及扩展、技能和模板，说明跟随界面语言；第一行“＋ 显示高级命令”展开全部命令（高级命令在最后一组）。可输入文字筛选，选中后把 `/命令名 ` 填入输入框。
-- **`/settings`**（S4，2026-11-25）：默认打开 Glide 风格的图形化设置页（`nightglide-settings.ts`）：宽屏（≥100 列）左分类栏 + 右控件 + 底部双语按键提示，窄于 100 列单栏（先分类，Enter 进入，Esc 返回）。分类：外观（暗/亮主题卡片、动效、图标字符、输入框样式）、模型（当前模型 + 实际思考强度只读卡、思考强度等级条、路由模式、本地模型、隐藏思考内容、登录／自定义提供商／切换模型三个入口）、审批（三档说明卡片）、通知（三个开关）、会话（自动恢复、自动压缩、出错重试、token 用量、每轮耗时）、语言（即时切换）、高级设置（内嵌上游全部标签页，Esc 返回）。全部控件改即保存；主题提交走槽位 effect 链，悬停卡片实时预览；页底色取主题家族场景色，ASCII 符号集与 NO_COLOR 有降级样式；鼠标点击控件、滚轮整行滚动。“常用”标签及 `settings-common.ts` 已删除；高级设置隐藏已失效的 `startup.checkUpdate`、`update.channel`、`update.auto`、`startup.changelogMode`（显示层清单，不改注册；见开发计划 S4 完成记录）。截图在 `scripts/glide-spike/shots/s4/`（zh/en × 120×36 + 80×24）。
+- **`/settings`**（S4–G5，2026-11-27 更新）：默认打开 Glide 风格的图形化设置页（`nightglide-settings.ts`）：宽屏（≥100 列）左分类栏 + 右控件 + 底部双语按键提示，窄于 100 列单栏。外观分类覆盖 7 套内置主题卡片（3 亮 + 3 暗 + 1 极光）、动效、图标字符、输入框样式及 **G4 像素伙伴形象选择**（`nightglide.robotStyle`：`auto` 跟随主题 / `glider` 夜航机甲 / `cat` 星云猫耳 / `owl` 夜鸮领航 / `diver` 深海潜航 / `prism` 极光星灵，附 10×5 实时预览与双语简介）。
+- **启动画面与向导**（S5，2026-11-27 收尾）：`NIGHTGLIDE_WORDMARK` 重绘为 46×5 实心方块大写字母 `NIGHTGLIDE`，修复 NeoX Mono 回退字体下的断笔与错位问题；跳过提示改用独立空格文本（`按 Enter 跳过` / `Press Enter to skip`）。`SelectList` 完成中英双语化，向导包含 P3.1/P3.2 路由与自定义提供商引导（`CURRENT_SETUP_VERSION = 4`）。
+- **任务总结（G4 `/summary`）**：侧边栏底部按钮或 `/summary` 命令打开 `TaskSummaryComponent`，先离线展示真实会话、工具、文件与子智能体事实，并明确提示上下文范围与潜在费用；仅在用户主动触发时调用当前模型，生成失败/取消/无凭据均不篡改原会话历史。
 
 ## 提供商
 
@@ -34,42 +38,45 @@
 
 ## 下一步
 
-按 [开发计划](DEVELOPMENT_PLAN.md) 的顺序：~~品牌化~~（已完成，截图验收待补）→ ~~P3.3 审批策略~~（默认已改为 `write`，`~/.omp` 默认受限；三档中文名随菜单简化、审批框中文化随 G3，见 [P3.3](reviews/p3.3-approval-policy.md)）→ ~~菜单与设置简化~~（初版，已被 S4 取代）→ **设置与命令重做**（~~S1 双语~~、~~S2 命令分层~~、~~S3 `/more`~~、~~S4 图形化设置页~~ 已完成；下一项 S5 验收与收尾，见开发计划）→ G3 → G4 → P3.1／3.2 → G5 → 交互基线与 G6 → P4。
+按 [开发计划](DEVELOPMENT_PLAN.md) 的顺序：~~品牌化~~ → ~~P3.3 审批策略~~ → ~~设置与命令重做（S1–S5）~~ → ~~G3 内容卡片与双语审批框~~ → ~~G4 像素伙伴、折叠侧栏与 `/summary`~~ → ~~P3.1／3.2 向导与路由界面~~ → ~~G5 七套主题定稿与双侧云海~~ → ~~Web 统计面板与 `/export` 视觉重做~~ → ~~v1.0.0 打包与独立二进制自检~~ 均已完成验证（详见 [v1.0.0 发布清单](P4_RELEASE_CHECKLIST.md)）；P4 仅保留无录屏要求的静态截图矩阵与多平台安装包/Homebrew/APT 交付，G6 长会话压测、tmux 与中文输入法候选框实测继续在后续版本跟踪。
 
 界面各阶段（G1–G6，详见 glide-spike.md）：
 
-1. ~~**G1 收尾**~~：已完成（2026-11-20）——回看锚定、End／点击回到底部、全屏动画帧、`/copy`、布局设置（`--classic` 等入口已随品牌化移除）、screen provider 测试。
-2. ~~**G2 场景精修**~~：已完成（2026-11-21）——飞行近远两层视差与细光带、潜水光柱／水草／气泡、按实际生效强度联动、四主题 256 色专用配色、`--motion none` 静帧。真彩只做了渲染预览，未在真彩终端实测（见 glide-spike.md“G2 结果”）。
-3. **G3 内容卡片**：用户消息卡、回复标题、工具 chip、diff 卡片、审批框统一。
-4. **G4 机器人与信息栏**：像素机器人三态、强度彩条、子智能体实时状态、任务总结入口。
-5. **G5 四主题定稿**：映射待定（flight / cloudlight / abyss / daybreak，aurora 额外保留），亮暗截图矩阵。
-6. **G6 稳定性**：长会话性能、tmux、中文输入法候选框位置。
+1. ~~**G1 收尾**~~：已完成（2026-11-20）——回看锚定、End／点击回到底部、全屏动画帧、`/copy`、screen provider 测试。
+2. ~~**G2 场景精修**~~：已完成（2026-11-21），2026-11-27 已补全顶底双侧云海与真彩 Ghostty 实机截图。
+3. ~~**G3 内容卡片**~~：已完成（2026-11-27）——用户消息卡、`✦ Nightglide` 回复标题、工具与 diff 卡片、双语审批框（修复 `[y]`/`[s]`/`[n]` 误触发与失效提示）。
+4. ~~**G4 伙伴与信息栏**~~：已完成（2026-11-27）——5 种可切换像素伙伴 + `"auto"` 跟随、默认收起的可折叠重设计侧栏、实时思考条/上下文/`工作目录`/子智能体及 `/summary` 任务总结弹窗。
+5. ~~**G5 七主题定稿**~~：已完成（2026-11-27）——7 套内置主题（3 亮 + 3 暗 + 1 极光）及外框/导出/场景色同步映射。
+6. **P4 发布收尾与 G6 后续**：v1.0.0 静态截图、清单、LICENSE/THIRD-PARTY-NOTICES、Bun `1.4.5` 四平台打包（`.tar.gz`/`.deb`/APT/Homebrew）与 GitHub Release 流水线已就绪；Linux `.deb` 实机运行依赖 GitHub Actions runner 验收，G6 长会话性能、tmux、中文输入法候选框与视频录屏留待后续版本。
 
 ## 主题
 
-只内置 Nightglide 的六套主题（Aurora 有自己的场景和启动动画，见下）：nightglide-flight（默认暗色）、nightglide-cloudlight（默认亮色）、nightglide-abyss、nightglide-daybreak、nightglide-aurora、nightglide-iris（彩虹云端·浅色，2026-11-25 从上游删掉的主题包找回 light-cirrus 的云层配色，按负责人要求改名 Iris——希腊神话的彩虹女神——并接入 Glide 彩虹卷云场景，`/theme iris` 可用，见 shots/s4-iris）。OMP 原有的 dark、light 和 100 套主题包已于 2026-11-20 删除；`dark`／`light` 等旧名称作为不列出的别名，分别加载 Flight／Cloudlight，旧配置与扩展不会因此报错。用户自定义主题（`~/.omp/agent/themes/*.json`）仍然可用。同轮修复：五套主题的代码块标题行对比度过低（约 1.5:1，提高到 3.5–4.3:1）；ASCII 符号模式下主题自带的 Unicode 转圈不再覆盖 ASCII。
+内置 Nightglide **7 套主题（3 亮色、3 暗色、1 极光）**：
+- **暗色（3 套）**：`nightglide-flight`（默认暗色，顶底双侧云海与月辉）、`nightglide-abyss`（深海潜水光柱与海草）、`nightglide-abyss-trench`（高对比深渊荧光青绿）。
+- **亮色（3 套）**：`nightglide-cloudlight`（默认亮色，晴空顶底双侧流云）、`nightglide-daybreak`（温润日光象牙底 `#fffaf2` 与浅海光柱）、`nightglide-iris`（虹彩柔云浅色，柔和粉彩彩虹波纹）。
+- **极光（1 套）**：`nightglide-aurora`（平滑渐变的绿紫极光帘幕与山脊剪影）。
 
-**飞行与潜水场景**（2026-11-24 重做）：飞行——顶部是夜空（Cloudlight 为白天），有月亮（太阳）和柔和光晕、高空薄云与星星；底部是三层漂移的云海，云团圆顶、受光边缘和暗部，近层漂得最快，思考强度越高云团越高、边缘越亮。潜水——顶部是从水下看到的水面：闪动的水面线、游移的焦散光斑和斜射光束；底部是礁石、沙地、摇曳的海草、珊瑚和上升的气泡。真彩下平滑渐变，256 色终端用克制的网格配色。
+`/theme <名称>` 支持直接切换并持久化对应槽位。G5 起 Glide 外框与导出配色直接基于主题 JSON 推导（`nightglide-theme-families.ts` `resolveFramePalette`）。`dark`/`light` 旧名作为未列出的兼容别名分别映射至 Flight/Cloudlight，用户自定义主题（`~/.omp/agent/themes/*.json`）仍可用。
 
-**Aurora 场景**（2026-11-24，第二版）：顶部是平滑渐变的极光帘幕——下缘最亮、光束高低不一、向上由绿转紫，帘幕之间只变暗不断开，下方有柔和光晕；底部是两层山脉（远山亮脊线、近山剪影）和地平线光晕，配少量星星。启动或切换到 Aurora 时，帘幕从左向右被点亮（约 3.5 秒）；关闭动效时直接显示完整画面。256 色终端用一套更克制的配色。
-
-**界面顶部**：不再有“✦ Nightglide ··· [主题名]”标题行，顶部场景从窗口最上沿开始。
-
-**场景像素**：默认每格上下两个像素（`▀` 半格）。Terminal.app 用字体自带的方块字符，NeoX Mono 下像素之间有缝，所以在 Terminal.app 中自动改为每格一个像素（只填背景色，清晰但较粗）；`NIGHTGLIDE_SCENE_PIXELS=1|2` 可覆盖。iTerm2、Ghostty 自己绘制方块且支持真彩，效果最精细（见 [安装说明](INSTALL.md)）。截图与预览在 `scripts/glide-spike/shots/aurora-v2/` 和 `shots/scenes-v2/`。Ghostty（真彩、自绘方块）实测了 Flight、Abyss、Aurora；Terminal.app 实测了 Flight、Aurora；其余主题在两种终端中只有渲染预览。
+**场景像素与终端验证**：支持真彩双像素半块（`▀`）与 Terminal.app 单像素（`cellPixels=1`）降级。2026-11-27 已在 **Ghostty（1.4.0，140×40）** 与 **Terminal.app（NeoX Mono 14pt，140×40）** 完成静态实机截图（`scripts/glide-spike/shots/verify-ghostty/`、`scripts/glide-spike/shots/verify/` 及场景预览 `scripts/glide-spike/shots/verify-preview/`），确认 `NIGHTGLIDE` 启动画面完整、无 Windows/废纸篓与 `7.2K/?` 杂讯、7 套主题云海/潜水/极光及重设计侧边栏与 `/settings`/`/summary` 正常渲染。持续动效录屏随 **P4** 阶段进行。
 
 ## 待决
 
-- ~~是否把 Glide 设为默认界面~~：已定为默认（2026-11-20）。
-- 四主题映射。
-- 五档思考强度现场展示需要支持可调 thinking level 的模型凭据（本地 `omlx/endless` 不支持）。
+- G6（长会话性能、tmux、中文输入法候选框）及 P4 平台兼容/发布前终端实机录屏验收。
+- 五档思考强度在实时会话中的逐步联动仍需支持可调 thinking level 的模型凭据实测。
 
 ## 验证边界
 
-- 启动器测试：`bun test ./scripts` 覆盖 NO_COLOR、退出与 SIGINT 复原、bunfig 隔离。Glide 有 shell／screen provider／布局参数测试。
-- 本地 oMLX（`omlx/endless`）在 Glide 下流式回复与推理显示已实测（2026-11-22）；工具调用未测。启动器会把本机地址加入 `NO_PROXY`，避免 shell 代理拦截本地模型请求。
-- `/theme <名称>` 可直接切换主题（保存到当前背景对应的 `theme.dark`/`theme.light`）。
-- 云端调用、MCP／扩展／LSP 真实加载与 fork 全量测试未在本轮重新验证。
-- Glide 真实终端截图见 `scripts/glide-spike/shots/`（G2 在 `shots/g2/`，渲染预览在 `shots/g2-preview/`）；本机无真彩终端，真彩场景只有渲染预览；更早轮次的证据、验收记录和样板已清理，可在 git 历史中查阅。
+- **静态检查与类型（2026-11-27）**：`vendor/omp` 内对全部 106 个改动文件运行 `oxlint` 0 警告 0 错误，对 102 个改动 `.ts`/`.tsx`/`.json` 文件运行 `oxfmt --check` 全部通过（导出 HTML 内嵌样式/脚本 `export/html/*.{js,css}` 沿用上游两空格格式规范）；`packages/utils`（253 文件）、`packages/tui`（3,166 文件）、`packages/stats`（543 + 89 文件 + `oxlint`/`oxfmt` 147 文件）、`packages/coding-agent`（`oxlint`+`check:types`）与 `packages/collab-web` `check` 全部 0 错误。
+- **自动化测试（2026-11-27）**：
+  - 根目录启动器与打包门禁：`bun test ./scripts`（15 pass, 0 fail，含 `launcher.test.ts` 6/6 与 `package-release.test.ts` 9/9）。
+  - 独立编译产物（Bun `1.4.5`，`nightglide-v1.0.0-darwin-arm64`）：隔离 `$HOME`/`$XDG_*` 实测 `--version`（`nightglide/1.0.0`）、`--help`、`--license`、`--smoke-test`（`smoke-test: ok`）与 `--mode rpc` SIGINT（退出码 `130`）。
+  - `packages/tui` 全量：`bun test`（4,960 pass, 8 skip；1 个上游已有 macOS 键帽基线失败 `GitHub run-watch renderer` 期望字面 `Ctrl+O` 而 macOS 下渲染 `⌃O`）。
+  - `packages/collab-web` 全量：`bun test`（139 pass, 0 fail）。
+  - `packages/coding-agent` Nightglide/导出/向导/许可子集（7 文件）：163 pass, 0 fail。
+  - `packages/stats`：`web-i18n.test.ts` 2 pass, 0 fail；全量 `bun test` 255 pass, 1 个上游基线失败（`test/db-cost.test.ts:400`）。
+  - `Nightglide Stats` Web 面板 Chromium 实机验证：Flight Dark（中文）与 Cloudlight（英文）零控制台错误，所有资源与接口均返回 HTTP 200（截图见 `docs/images/screenshots/stats-web-{dark,light}.png`）。
+- **未在本轮重跑 / 待 CI 覆盖**：`darwin-x64`（Intel Mac）与 `linux-x64`/`linux-arm64` `.deb` 实机运行由 GitHub Actions `ci-release.yml` 执行；云端实连模型、MCP/LSP 全量、长会话压测、`tmux`、中文输入法候选框与视频录屏保留为后续跟踪项。
 
 ## 安全
 

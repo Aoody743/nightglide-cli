@@ -12,7 +12,7 @@ mkdir -p $root/agent $root/work
 model=$(sed -n 's/^  default: *"\{0,1\}\([^"]*\)"\{0,1\}$/\1/p' ~/.omp/agent/config.yml | head -1)
 cat > $root/agent/config.yml <<EOF
 symbolPreset: unicode
-setupVersion: 3
+setupVersion: 4
 theme:
   dark: $theme
   light: $theme
