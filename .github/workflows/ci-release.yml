@@ -73,9 +73,10 @@ jobs:
           bun install --cwd vendor/omp --frozen-lockfile
 
       - name: Build native addon (pi_natives)
+        working-directory: vendor/omp
         env:
           OMP_NATIVE_CARGO_PROFILE: ci
-        run: bun --cwd vendor/omp run build:native
+        run: bun run build:native
 
       - name: Lint and format check modified license files
         run: |
@@ -191,9 +192,10 @@ jobs:
           bun install --cwd vendor/omp --frozen-lockfile
 
       - name: Build native addon (pi_natives)
+        working-directory: vendor/omp
         env:
           OMP_NATIVE_CARGO_PROFILE: ci
-        run: bun --cwd vendor/omp run build:native
+        run: bun run build:native
 
       - name: Compile & package Nightglide (${{ matrix.target }})
         run: |

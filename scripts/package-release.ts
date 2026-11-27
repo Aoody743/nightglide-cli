@@ -745,7 +745,7 @@ async function prepareCrossNatives(input: {
 	if (!input.fetchCrossNatives) {
 		throw new Error(
 			`Missing native addon(s) for target(s): ${missingTargets.join(", ")} in ${nativeDir}. ` +
-				`Build natively via \`bun --cwd vendor/omp run build:native\` or pass --fetch-cross-natives.`,
+				`Build natively via \`bun --cwd=vendor/omp run build:native\` or pass --fetch-cross-natives.`,
 		);
 	}
 
