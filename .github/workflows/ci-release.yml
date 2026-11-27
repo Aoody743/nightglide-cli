@@ -16,7 +16,7 @@ on:
         required: false
         type: string
       publish:
-        description: "Publish GitHub Release, Homebrew tap, and APT gh-pages"
+        description: "Publish GitHub Release, Homebrew tap, and APT GitHub Pages"
         required: false
         type: boolean
         default: true
@@ -347,12 +347,81 @@ jobs:
           git commit -m "nightglide ${{ steps.meta.outputs.version }}"
           git push origin HEAD:main
 
-      - name: Deploy APT repository to gh-pages
-        if: steps.meta.outputs.should_upload == 'true'
-        uses: peaceiris/actions-gh-pages@v4
+  deploy-apt:
+    name: Deploy APT Repository (GitHub Pages)
+    needs: [verify, build-release]
+    if: >-
+      needs.verify.result == 'success' &&
+      needs.build-release.result == 'success' &&
+      (startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.publish))
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./dist/apt
-          destination_dir: apt
-          keep_files: true
-          commit_message: "apt: publish nightglide ${{ steps.meta.outputs.tag }}"
+          bun-version: "1.4.5"
+
+      - name: Resolve release version
+        id: meta
+        shell: bash
+        run: |
+          if [ -n "${{ inputs.version }}" ]; then
+            ver="${{ inputs.version }}"
+          elif [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            ver="${GITHUB_REF_NAME}"
+          else
+            ver="$(sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' package.json | head -n 1)"
+          fi
+          ver="${ver#v}"
+          echo "version=$ver" >> "$GITHUB_OUTPUT"
+
+      - name: Download release artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: release-assets-*
+          path: dist/release
+          merge-multiple: true
+
+      - name: Build APT repository index
+        run: |
+          bun run scripts/package-release.ts \
+            --version "${{ steps.meta.outputs.version }}" \
+            --targets darwin-arm64,darwin-x64,linux-x64,linux-arm64 \
+            --assemble-only \
+            --deb \
+            --strict-formula
+          mkdir -p _site
+          cp -R dist/apt _site/apt
+          cat > _site/index.html <<'HTML'
+          <!doctype html>
+          <html lang="en">
+          <head><meta charset="utf-8"><title>Nightglide CLI APT Repository</title></head>
+          <body style="font-family:system-ui,sans-serif;max-width:720px;margin:3rem auto;padding:0 1rem;background:#0c1124;color:#e6eefb">
+          <h1>Nightglide CLI APT Repository</h1>
+          <pre style="background:#141b36;padding:1rem;border-radius:8px;overflow:auto">echo "deb [trusted=yes] https://aoody743.github.io/nightglide-cli/apt stable main" | sudo tee /etc/apt/sources.list.d/nightglide.list
+          sudo apt-get update &amp;&amp; sudo apt-get install -y nightglide</pre>
+          <p><a href="https://github.com/Aoody743/nightglide-cli" style="color:#69b4ff">GitHub Repository</a></p>
+          </body></html>
+          HTML
+
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload APT Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - name: Deploy APT Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
